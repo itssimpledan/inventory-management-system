@@ -275,6 +275,44 @@ def init_db():
         rejected_date       TEXT,
         created_at          TEXT    DEFAULT (datetime('now'))
     );
+
+    -- ── PERIODS ──────────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS periods (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        period      TEXT    NOT NULL UNIQUE,
+        status      TEXT    DEFAULT 'Open',
+        created_at  TEXT    DEFAULT (datetime('now')),
+        closed_at   TEXT,
+        closed_by   TEXT,
+        notes       TEXT
+    );
+
+    -- ── PERIOD OPENING BALANCES ───────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS period_opening_balances (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        period      TEXT    NOT NULL,
+        item_id     TEXT    NOT NULL,
+        opening_qty REAL    DEFAULT 0
+    );
+
+    -- ── STOCKCOUNT UPLOADS ────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS stockcount_uploads (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        period      TEXT    NOT NULL,
+        filename    TEXT,
+        uploaded_by TEXT    NOT NULL,
+        uploaded_at TEXT    DEFAULT (datetime('now')),
+        status      TEXT    DEFAULT 'Pending',
+        approved_by TEXT,
+        approved_at TEXT,
+        notes       TEXT
+    );
+
+    -- ── SETTINGS ─────────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS settings (
+        key   TEXT NOT NULL UNIQUE,
+        value TEXT
+    );
     """)
     db.commit()
     print("✓ Schema created / verified.")
