@@ -58,7 +58,8 @@ def init_db():
         lead_days           INTEGER DEFAULT 14,
         preferred_supplier  TEXT,
         status              TEXT    DEFAULT 'Active',
-        notes               TEXT
+        notes               TEXT,
+        brand               TEXT
     );
 
     -- ── PURCHASE ORDERS ──────────────────────────────────────────────────────
@@ -86,9 +87,27 @@ def init_db():
         expected_delivery_date  TEXT,
         received_date           TEXT,
         received_qty            REAL,
+        received_by             TEXT,
         notes                   TEXT,
         created_at              TEXT    DEFAULT (datetime('now')),
-        updated_at              TEXT    DEFAULT (datetime('now'))
+        updated_at              TEXT    DEFAULT (datetime('now')),
+        amount_paid             REAL    DEFAULT 0,
+        deposit_amount_paid     REAL    DEFAULT 0,
+        deposit_paid_by         TEXT,
+        full_paid_by            TEXT,
+        ops_approved_by         TEXT,
+        ops_approval_date       TEXT,
+        cancelled_by            TEXT,
+        cancelled_at            TEXT,
+        cancel_reason           TEXT,
+        cancellation_resolution TEXT,
+        resolution_type         TEXT,
+        resolution_notes        TEXT,
+        resolved_by             TEXT,
+        resolved_at             TEXT,
+        partial_close_reason    TEXT,
+        partial_closed_by       TEXT,
+        partial_closed_at       TEXT
     );
 
     -- ── INVENTORY LEDGER ─────────────────────────────────────────────────────
@@ -145,12 +164,15 @@ def init_db():
         platform     TEXT,
         period_from  TEXT,
         period_to    TEXT,
+        period       TEXT,
         filename     TEXT,
         total_rows   INTEGER DEFAULT 0,
         uploaded_by  TEXT,
         status       TEXT DEFAULT 'Draft',
         notes        TEXT,
-        created_at   TEXT DEFAULT (datetime('now'))
+        created_at   TEXT DEFAULT (datetime('now')),
+        parser_type  TEXT,
+        file_type    TEXT
     );
     CREATE TABLE IF NOT EXISTS sales_lines (
         id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,7 +184,24 @@ def init_db():
         unit_selling_price REAL DEFAULT 0,
         gross_revenue      REAL DEFAULT 0,
         platform_fees      REAL DEFAULT 0,
-        net_revenue        REAL DEFAULT 0
+        net_revenue        REAL DEFAULT 0,
+        brand              TEXT,
+        tx_type            TEXT,
+        tx_status          TEXT,
+        tx_amount          REAL DEFAULT 0,
+        gst_amount         REAL DEFAULT 0,
+        amt_receivable     REAL DEFAULT 0,
+        expenses_total     REAL DEFAULT 0,
+        is_flagged         INTEGER DEFAULT 0,
+        flag_reason        TEXT,
+        payout_id          TEXT,
+        payout_date        TEXT,
+        sponsored_voucher  REAL DEFAULT 0,
+        rebates            REAL DEFAULT 0,
+        fees_incl_gst      REAL DEFAULT 0,
+        fees_ex_gst        REAL DEFAULT 0,
+        gst_on_fees        REAL DEFAULT 0,
+        payout_amount      REAL DEFAULT 0
     );
 
     -- ── PO LINE ITEMS ────────────────────────────────────────────────────────
