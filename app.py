@@ -6092,6 +6092,8 @@ def run_migrations():
 
 
 # ── APP ENTRY POINT ───────────────────────────────────────────────────────────
+# Run migrations on every startup (works both directly and via WSGI)
+run_migrations()
+
 if __name__ == "__main__":
-    run_migrations()
     app.run(debug=True, host="0.0.0.0", port=5000)
