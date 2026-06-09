@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Company Settings{% endblock %}
+{% block page_title %}<i class="bi bi-gear me-2" style="color:#2E75B6"></i>Company Settings{% endblock %}
+
+{% block content %}
+<div class="row g-4" style="max-width:760px;">
+
+  <!-- ── Branding ──────────────────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-palette me-2"></i>Branding</div>
+      <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="section" value="branding">
+
+        <div class="mb-4">
+          <label class="form-label fw-600">Company Name</label>
+          <input type="text" name="company_name" class="form-control"
+                 value="{{ s.get('company_name','') }}"
+                 placeholder="e.g. Acme Pte Ltd" maxlength="80">
+          <div class="form-text">Shown in the sidebar, login page and PDF headers.</div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-600">Company Logo</label>
+          {% if s.get('company_logo') %}
+          <div class="mb-2 d-flex align-items-center gap-3">
+            <img src="{{ url_for('static', filename='uploads/' + s['company_logo']) }}"
+                 alt="Logo" style="max-height:60px;max-width:180px;border-radius:6px;border:1px solid #e0e0e0;padding:4px;background:#fff;">
+            <span class="text-muted" style="font-size:12px;">Current logo</span>
+          </div>
+          {% endif %}
+          <input type="file" name="company_logo" class="form-control"
+                 accept=".png,.jpg,.jpeg,.gif,.svg,.webp">
+          <div class="form-text">PNG, JPG, SVG or GIF. Recommended: transparent background, max 300 × 100 px.</div>
+        </div>
+
+        {% if s.get('company_name') or s.get('company_logo') %}
+        <div class="mb-4 p-3 rounded" style="background:#1F4E79;max-width:260px;">
+          <div class="d-flex align-items-center gap-2">
+            {% if s.get('company_logo') %}
+            <img src="{{ url_for('static', filename='uploads/' + s['company_logo']) }}"
+                 alt="Logo" style="height:28px;width:auto;border-radius:4px;">
+            {% else %}
+            <i class="bi bi-box-seam" style="color:#fff;font-size:20px;"></i>
+            {% endif %}
+            <div>
+              <div style="color:#fff;font-weight:700;font-size:14px;">{{ s.get('company_name','IMS') }}</div>
+              <div style="color:rgba(255,255,255,.5);font-size:11px;">Inventory Management</div>
+            </div>
+          </div>
+          <div style="color:rgba(255,255,255,.4);font-size:10px;margin-top:6px;">← Sidebar preview</div>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="bi bi-save me-1"></i>Save Branding
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Company Information ───────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-building me-2"></i>Company Information</div>
+      <p style="font-size:13px;color:#666;" class="mb-4">
+        This information appears on Purchase Orders sent to suppliers.
+      </p>
+      <form method="POST">
+        <input type="hidden" name="section" value="info">
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-600">Company Phone</label>
+            <input type="text" name="company_phone" class="form-control"
+                   value="{{ s.get('company_phone','') }}"
+                   placeholder="e.g. +65 6123 4567">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Company Email</label>
+            <input type="email" name="company_email" class="form-control"
+                   value="{{ s.get('company_email','') }}"
+                   placeholder="e.g. procurement@company.com">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-600">HQ / Registered Address</label>
+          <textarea name="company_hq_address" class="form-control" rows="3"
+                    placeholder="123 Business Park, #04-01&#10;Singapore 123456">{{ s.get('company_hq_address','') }}</textarea>
+          <div class="form-text">Used for internal records. Not printed on supplier POs.</div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-600">
+            Warehouse / Delivery Address
+            <span class="ms-2" style="font-size:11px;background:#E2EFDA;color:#375623;border-radius:4px;padding:2px 8px;font-weight:700;">Used on Supplier PO</span>
+          </label>
+          <textarea name="company_warehouse_address" class="form-control" rows="3"
+                    placeholder="456 Warehouse Road, #01-01&#10;Singapore 654321">{{ s.get('company_warehouse_address','') }}</textarea>
+          <div class="form-text">This is the "Deliver To" address printed on POs sent to suppliers.</div>
+        </div>
+
+        <!-- Preview card -->
+        {% if s.get('company_name') %}
+        <div class="mb-4 p-3 rounded" style="border:1px solid #BDD7EE;background:#F0F7FF;font-size:12px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:8px;">
+            <i class="bi bi-file-earmark-text me-1"></i>Supplier PO Preview — Deliver To block
+          </div>
+          <div style="font-weight:700;color:#1F4E79;">{{ s.get('company_name','Company Name') }}</div>
+          {% if s.get('company_phone') %}<div class="text-muted">Tel: {{ s.get('company_phone') }}</div>{% endif %}
+          {% if s.get('company_email') %}<div class="text-muted">{{ s.get('company_email') }}</div>{% endif %}
+          {% if s.get('company_warehouse_address') %}
+          <div class="text-muted" style="white-space:pre-line;">{{ s.get('company_warehouse_address') }}</div>
+          {% else %}
+          <div class="text-muted fst-italic">Warehouse address not set yet</div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="bi bi-save me-1"></i>Save Company Info
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

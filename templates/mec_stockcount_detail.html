@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Stockcount {{ period }}{% endblock %}
+{% block page_title %}
+  <i class="bi bi-clipboard-data me-2" style="color:#375623"></i>Stockcount — {{ period }}
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('mec_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  <a href="{{ url_for('mec_reconciliation', period=period) }}" class="btn btn-sm btn-outline-primary ms-2">
+    <i class="bi bi-bar-chart-line me-1"></i>Reconciliation
+  </a>
+{% endblock %}
+
+{% block content %}
+<!-- Upload metadata -->
+<div class="form-card mb-3">
+  <div class="row g-3">
+    <div class="col-md-3">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Period</div>
+      <div class="fw-700" style="font-size:16px;color:#1F4E79;">{{ period }}</div>
+    </div>
+    <div class="col-md-3">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Status</div>
+      <span class="badge-status {% if upload.status == 'Approved' %}s-received{% else %}s-pending{% endif %}">
+        {{ upload.status }}
+      </span>
+    </div>
+    <div class="col-md-3">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Uploaded By</div>
+      <div style="font-size:13px;">{{ upload.uploaded_by | title }}</div>
+      <div style="font-size:11px;color:#888;">{{ upload.uploaded_at[:10] if upload.uploaded_at }}</div>
+    </div>
+    <div class="col-md-3">
+      {% if upload.status == 'Approved' %}
+      <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Approved By</div>
+      <div style="font-size:13px;">{{ upload.approved_by | title }}</div>
+      <div style="font-size:11px;color:#888;">{{ upload.approved_at[:10] if upload.approved_at }}</div>
+      {% elif role in ('admin','ops_manager') and (not period_obj or period_obj.status != 'Closed') %}
+      <form method="POST" action="{{ url_for('mec_stockcount_approve', upload_id=upload.id) }}">
+        <button type="submit" class="btn btn-success btn-sm w-100"
+                onclick="return confirm('Approve this stockcount? Variance adjustments will be posted to the ledger.')">
+          <i class="bi bi-check-circle-fill me-1"></i>Approve Stockcount
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% if upload.notes %}
+  <div class="mt-2 p-2 rounded" style="background:#F8F9FA;font-size:12px;color:#555;">
+    <i class="bi bi-sticky me-1"></i>{{ upload.notes }}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Variance summary -->
+{% set surplus_rows  = rows | selectattr('variance','gt',0.001) | list %}
+{% set shortage_rows = rows | selectattr('variance','lt',-0.001) | list %}
+{% set ok_rows       = rows | selectattr('variance','ge',-0.001) | selectattr('variance','le',0.001) | list %}
+
+{% if surplus_rows or shortage_rows %}
+<div class="row g-2 mb-3">
+  {% if shortage_rows %}
+  <div class="col-md-6">
+    <div class="rounded p-3" style="background:#FFF5F5;border:1px solid #F5C6CB;">
+      <div style="font-size:12px;font-weight:700;color:#842029;">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ shortage_rows|length }} SKU(s) with shortage
+      </div>
+      <div style="font-size:11px;color:#842029;">Physical count below book balance</div>
+    </div>
+  </div>
+  {% endif %}
+  {% if surplus_rows %}
+  <div class="col-md-6">
+    <div class="rounded p-3" style="background:#F0FBF4;border:1px solid #B8E0C8;">
+      <div style="font-size:12px;font-weight:700;color:#375623;">
+        <i class="bi bi-plus-circle me-1"></i>{{ surplus_rows|length }} SKU(s) with surplus
+      </div>
+      <div style="font-size:11px;color:#375623;">Physical count above book balance</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Variance table -->
+<div class="ims-table">
+  <div class="p-3" style="background:#fff;border-bottom:1px solid #eee;">
+    <span style="font-weight:700;color:#1F4E79;font-size:14px;">{{ rows|length }} SKU(s)</span>
+    <span style="font-size:12px;color:#888;margin-left:8px;">
+      {{ ok_rows|length }} matched · {{ shortage_rows|length }} shortage · {{ surplus_rows|length }} surplus
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover" style="font-size:13px;">
+      <thead>
+        <tr>
+          <th>SKU</th><th>Item</th>
+          <th class="text-end">Opening</th>
+          <th class="text-end">Receipts In</th>
+          <th class="text-end">Adj +</th>
+          <th class="text-end">Adj −</th>
+          <th class="text-end" style="color:#1F4E79;">Book Balance</th>
+          <th class="text-end" style="color:#375623;">Physical</th>
+          <th class="text-end">Variance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{% if r.variance < -0.001 %}table-danger{% elif r.variance > 0.001 %}table-success{% endif %}">
+          <td><span style="background:#DEEAF1;color:#1F4E79;border-radius:3px;padding:1px 5px;font-size:11px;font-weight:600;">{{ r.item_id }}</span></td>
+          <td style="font-size:12px;">{{ r.item_name }}</td>
+          <td class="text-end">{{ "{:,.0f}".format(r.opening) }}</td>
+          <td class="text-end text-success">{% if r.receipts_in %}+{{ "{:,.0f}".format(r.receipts_in) }}{% else %}—{% endif %}</td>
+          <td class="text-end text-success">{% if r.adj_in %}+{{ "{:,.0f}".format(r.adj_in) }}{% else %}—{% endif %}</td>
+          <td class="text-end text-danger">{% if r.adj_out %}−{{ "{:,.0f}".format(r.adj_out) }}{% else %}—{% endif %}</td>
+          <td class="text-end fw-700" style="color:#1F4E79;">{{ "{:,.0f}".format(r.book) }}</td>
+          <td class="text-end fw-700" style="color:#375623;">{{ "{:,.0f}".format(r.physical) }}</td>
+          <td class="text-end fw-700">
+            {% if r.variance > 0.001 %}
+              <span class="text-success">+{{ "{:,.0f}".format(r.variance) }}</span>
+            {% elif r.variance < -0.001 %}
+              <span class="text-danger">{{ "{:,.0f}".format(r.variance) }}</span>
+            {% else %}
+              <span class="text-muted">0</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-center text-muted py-5">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if upload.status == 'Approved' %}
+<div class="alert alert-success mt-3" style="font-size:13px;">
+  <i class="bi bi-check-circle-fill me-1"></i>
+  This stockcount has been approved. Variance adjustments have been posted to the inventory ledger.
+  <a href="{{ url_for('ledger') }}?type=%28%2B%29+Adjustment+%E2%80%93+Stockcount" class="alert-link">View ledger entries</a>
+</div>
+{% endif %}
+{% endblock %}

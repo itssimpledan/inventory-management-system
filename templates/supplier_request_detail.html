@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}{{ req.request_id }}{% endblock %}
+{% block page_title %}
+  <i class="bi bi-building me-2" style="color:#2E75B6"></i>{{ req.request_id }}
+  <span class="ms-2 badge-status
+    {% if req.status == 'Pending' %}s-pending
+    {% elif req.status == 'Ops Approved' %}s-ops-approved
+    {% elif req.status == 'Approved' %}s-received
+    {% else %}s-cancelled{% endif %}"
+    style="font-size:13px;">{{ req.status }}</span>
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('supplier_list') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Suppliers
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- Left: request details -->
+  <div class="col-lg-8">
+    <div class="form-card">
+      <div class="form-section-title">
+        <i class="bi bi-info-circle me-1"></i>Request Details
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-sm-4">
+          <div class="text-muted" style="font-size:11px;">Request Type</div>
+          <div class="fw-600">
+            <span class="badge-status
+              {% if req.request_type == 'New' %}s-received
+              {% elif req.request_type == 'Edit' %}s-approved
+              {% else %}s-cancelled{% endif %}">
+              {{ req.request_type }}
+            </span>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="text-muted" style="font-size:11px;">Raised By</div>
+          <div class="fw-600">{{ req.raised_by }}</div>
+        </div>
+        <div class="col-sm-4">
+          <div class="text-muted" style="font-size:11px;">Date Raised</div>
+          <div class="fw-600">{{ req.raised_date | dateformat }}</div>
+        </div>
+        {% if req.supplier_id %}
+        <div class="col-sm-4">
+          <div class="text-muted" style="font-size:11px;">Target Supplier</div>
+          <div class="fw-600">{{ req.supplier_id }}</div>
+        </div>
+        {% endif %}
+        {% if req.reason %}
+        <div class="col-12">
+          <div class="text-muted" style="font-size:11px;">Reason / Justification</div>
+          <div style="font-size:13px;">{{ req.reason }}</div>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if req.request_type != 'Deactivate' %}
+      <hr>
+      <div class="form-section-title"><i class="bi bi-building me-1"></i>Proposed Supplier Data</div>
+      <div class="row g-2" style="font-size:13px;">
+        {% set fields = [
+          ('Name', req.prop_name),
+          ('Contact', req.prop_contact_name),
+          ('Email', req.prop_email),
+          ('Phone', req.prop_phone),
+          ('Payment Terms', req.prop_payment_terms),
+          ('Lead Days', req.prop_lead_days),
+          ('Currency', req.prop_currency),
+          ('Bank Name', req.prop_bank_name),
+          ('Bank Account', req.prop_bank_account),
+          ('SWIFT Code', req.prop_swift_code),
+          ('Notes', req.prop_notes),
+        ] %}
+        {% for label, val in fields %}
+        {% if val %}
+        <div class="col-md-4">
+          <div class="text-muted" style="font-size:11px;">{{ label }}</div>
+          <div class="fw-600">{{ val }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      {% if req.request_type == 'Edit' and supplier %}
+      <hr>
+      <div class="form-section-title"><i class="bi bi-building me-1" style="color:#856404;"></i>Current Supplier Data</div>
+      <div class="row g-2" style="font-size:13px;">
+        {% set cur_fields = [
+          ('Name', supplier.name),
+          ('Contact', supplier.contact_name),
+          ('Email', supplier.email),
+          ('Phone', supplier.phone),
+          ('Payment Terms', supplier.payment_terms),
+          ('Lead Days', supplier.lead_days),
+          ('Currency', supplier.currency),
+          ('Bank Name', supplier.bank_name),
+          ('Bank Account', supplier.bank_account),
+          ('SWIFT Code', supplier.swift_code),
+          ('Notes', supplier.notes),
+        ] %}
+        {% for label, val in cur_fields %}
+        <div class="col-md-4">
+          <div class="text-muted" style="font-size:11px;">{{ label }}</div>
+          <div>{{ val or '—' }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endif %}
+    </div><!-- /form-card -->
+
+    <!-- Approval Actions -->
+    {% if can_approve or can_reject %}
+    <div class="form-card mt-4">
+      <div class="form-section-title"><i class="bi bi-check2-circle me-1"></i>Approval Actions</div>
+      <div class="d-flex gap-2 flex-wrap">
+        {% if can_approve %}
+        <form method="POST">
+          <input type="hidden" name="action" value="approve">
+          <button type="submit" class="btn btn-success"
+            onclick="return confirm('Approve this request? Changes will be applied to supplier master data immediately.')">
+            <i class="bi bi-check-circle-fill me-1"></i>Approve &amp; Apply
+          </button>
+        </form>
+        {% endif %}
+        {% if can_reject %}
+        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+          <i class="bi bi-x-circle me-1"></i>Reject
+        </button>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Supporting Documents -->
+    <div class="form-card mt-4">
+      <div class="form-section-title"><i class="bi bi-paperclip me-1"></i>Supporting Documents</div>
+      {% if req_docs %}
+      <div class="mb-3">
+        {% for doc in req_docs %}
+        <div class="d-flex align-items-center gap-2 mb-1 p-2" style="background:#f8f9fa;border-radius:6px;font-size:12px;">
+          <i class="bi bi-file-earmark text-muted"></i>
+          <a href="{{ url_for('static', filename='uploads/' + doc.filename) }}" target="_blank" class="fw-600">{{ doc.original_name }}</a>
+          <span class="text-muted ms-1">{{ doc.doc_type }}</span>
+          {% if doc.notes %}<span class="text-muted">— {{ doc.notes }}</span>{% endif %}
+          <span class="ms-auto text-muted">{{ doc.uploaded_by }} · {{ doc.uploaded_at[:10] if doc.uploaded_at else '' }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted" style="font-size:12px;margin-bottom:12px;">No documents attached yet.</p>
+      {% endif %}
+      {% if req.status not in ('Approved','Rejected') %}
+      <form method="POST" action="{{ url_for('supplier_request_doc_upload', req_id=req.id) }}" enctype="multipart/form-data">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <input type="file" name="doc_file" class="form-control form-control-sm" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv" required>
+          </div>
+          <div class="col-md-3">
+            <select name="doc_type" class="form-select form-select-sm">
+              <option>Support</option>
+              <option>Invoice</option>
+              <option>Contract</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-upload me-1"></i>Upload</button>
+          </div>
+          <div class="col-12">
+            <input type="text" name="doc_notes" class="form-control form-control-sm" placeholder="Notes (optional)">
+          </div>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div><!-- /col-lg-8 -->
+
+  <!-- Right: timeline -->
+  <div class="col-lg-4">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-clock-history me-1"></i>Approval Timeline</div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <tbody>
+          <tr style="background:#E2EFDA;">
+            <td class="fw-600"><i class="bi bi-send me-1" style="color:#375623;"></i>Raised</td>
+            <td>{{ req.raised_by }}</td>
+            <td>{{ req.raised_date | dateformat }}</td>
+          </tr>
+          <tr {% if req.status in ('Ops Approved','Approved') %}style="background:#E2F0D9;"{% endif %}>
+            <td class="fw-600"><i class="bi bi-shield me-1" style="color:#FF9F7F;"></i>Ops Mgr</td>
+            <td>{{ req.ops_approved_by or '—' }}</td>
+            <td>{{ req.ops_approval_date | dateformat if req.ops_approval_date else '—' }}</td>
+          </tr>
+          <tr {% if req.status == 'Approved' %}style="background:#D4EDDA;"{% endif %}>
+            <td class="fw-600"><i class="bi bi-shield-check me-1" style="color:#90EE90;"></i>Finance Mgr</td>
+            <td>{{ req.fin_approved_by or '—' }}</td>
+            <td>{{ req.fin_approval_date | dateformat if req.fin_approval_date else '—' }}</td>
+          </tr>
+          {% if req.status == 'Rejected' %}
+          <tr style="background:#F8D7DA;">
+            <td class="fw-600"><i class="bi bi-x-circle me-1" style="color:#721C24;"></i>Rejected</td>
+            <td>{{ req.rejected_by or '—' }}</td>
+            <td>{{ req.rejected_date | dateformat if req.rejected_date else '—' }}</td>
+          </tr>
+          {% if req.rejection_reason %}
+          <tr style="background:#F8D7DA;">
+            <td colspan="3" style="color:#721C24;">{{ req.rejection_reason }}</td>
+          </tr>
+          {% endif %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div><!-- /col-lg-4 -->
+</div><!-- /row -->
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST">
+        <input type="hidden" name="action" value="reject">
+        <div class="modal-header" style="background:#dc3545;">
+          <h5 class="modal-title text-white"><i class="bi bi-x-circle me-2"></i>Reject Request</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-600">Reason for Rejection <span class="text-danger">*</span></label>
+            <textarea name="rejection_reason" class="form-control" rows="3" required
+              placeholder="Explain why this request is being rejected..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>Reject Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

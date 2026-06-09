@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Supplier Request{% endblock %}
+{% block page_title %}
+  <i class="bi bi-building-add me-2" style="color:#2E75B6"></i>
+  {% if request_type == 'New' %}New Supplier Request
+  {% elif request_type == 'Edit' %}Edit Supplier Request
+  {% else %}Deactivate Supplier Request{% endif %}
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('supplier_request_new') }}">
+  <input type="hidden" name="request_type" value="{{ request_type }}">
+  {% if supplier_id %}<input type="hidden" name="supplier_id" value="{{ supplier_id }}">{% endif %}
+
+  <div class="row g-4">
+    <!-- Left column -->
+    <div class="col-lg-8">
+
+      {% if request_type == 'Deactivate' %}
+      <!-- ── DEACTIVATE ───────────────────────────────────────────────────── -->
+      <div class="form-card">
+        <div class="form-section-title"><i class="bi bi-slash-circle me-1"></i>Deactivate Supplier</div>
+
+        {% if not supplier_id %}
+        <div class="mb-3">
+          <label class="form-label fw-600">Select Supplier <span class="text-danger">*</span></label>
+          <select name="supplier_id" class="form-select" required>
+            <option value="">— choose supplier —</option>
+            {% for s in suppliers %}
+            <option value="{{ s.supplier_id }}">{{ s.supplier_id }} — {{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% else %}
+        <div class="mb-3">
+          <label class="form-label fw-600">Supplier</label>
+          <input type="text" class="form-control" disabled
+            value="{{ supplier.supplier_id }} — {{ supplier.name }}">
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+          <label class="form-label fw-600">Reason for Deactivation <span class="text-danger">*</span></label>
+          <textarea name="reason" class="form-control" rows="3" required
+            placeholder="Explain why this supplier should be deactivated..."></textarea>
+        </div>
+      </div>
+
+      {% else %}
+      <!-- ── NEW / EDIT ───────────────────────────────────────────────────── -->
+
+      {% if request_type == 'Edit' and not supplier_id %}
+      <div class="form-card mb-4">
+        <div class="form-section-title"><i class="bi bi-search me-1"></i>Select Supplier to Edit</div>
+        <div class="mb-3">
+          <label class="form-label fw-600">Supplier <span class="text-danger">*</span></label>
+          <select name="supplier_id" class="form-select" required
+            onchange="this.form.action='{{ url_for('supplier_request_new') }}?type=Edit&supplier_id='+this.value; this.form.method='GET'; this.form.submit();">
+            <option value="">— choose supplier —</option>
+            {% for s in suppliers %}
+            <option value="{{ s.supplier_id }}">{{ s.supplier_id }} — {{ s.name }}</option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">Select a supplier to pre-fill current values</small>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if request_type == 'New' or supplier_id %}
+      <div class="form-card">
+        <div class="form-section-title"><i class="bi bi-info-circle me-1"></i>Supplier Details</div>
+
+        <div class="row g-3">
+          {% if request_type == 'New' %}
+          <div class="col-md-4">
+            <label class="form-label fw-600">Supplier ID</label>
+            <input type="text" name="prop_supplier_id" class="form-control"
+              placeholder="e.g. S004 (auto-assigned if blank)"
+              style="text-transform:uppercase;">
+            <small class="text-muted">Leave blank to auto-assign on approval</small>
+          </div>
+          {% endif %}
+          <div class="{% if request_type == 'New' %}col-md-8{% else %}col-md-8{% endif %}">
+            <label class="form-label fw-600">Supplier Name <span class="text-danger">*</span></label>
+            <input type="text" name="prop_name" class="form-control" required
+              value="{{ supplier.name if supplier else '' }}"
+              placeholder="e.g. Acme Trading Co.">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">Currency</label>
+            <select name="prop_currency" class="form-select">
+              {% for cur in ['USD','GBP','EUR','SGD','HKD','CNY','JPY'] %}
+              <option value="{{ cur }}" {% if (supplier and supplier.currency == cur) or (not supplier and cur == 'USD') %}selected{% endif %}>{{ cur }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Contact Name</label>
+            <input type="text" name="prop_contact_name" class="form-control"
+              value="{{ supplier.contact_name if supplier else '' }}"
+              placeholder="e.g. John Smith">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Email</label>
+            <input type="email" name="prop_email" class="form-control"
+              value="{{ supplier.email if supplier else '' }}"
+              placeholder="supplier@example.com">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Phone</label>
+            <input type="text" name="prop_phone" class="form-control"
+              value="{{ supplier.phone if supplier else '' }}"
+              placeholder="+1-555-0000">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-600">Payment Terms</label>
+            <select name="prop_payment_terms" class="form-select">
+              {% for t in ['Net 30','Net 45','Net 60','Net 90','CIA','COD','Net 15'] %}
+              <option value="{{ t }}" {% if supplier and supplier.payment_terms == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-600">Lead Days</label>
+            <input type="number" name="prop_lead_days" class="form-control" min="0"
+              value="{{ supplier.lead_days if supplier else 14 }}">
+          </div>
+        </div>
+
+        <hr class="my-3">
+        <div class="form-section-title"><i class="bi bi-bank me-1"></i>Banking Details</div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-600">Bank Name</label>
+            <input type="text" name="prop_bank_name" class="form-control"
+              value="{{ supplier.bank_name if supplier else '' }}"
+              placeholder="e.g. First National Bank">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">Bank Account</label>
+            <input type="text" name="prop_bank_account" class="form-control"
+              value="{{ supplier.bank_account if supplier else '' }}"
+              placeholder="Account number">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">SWIFT / BIC Code</label>
+            <input type="text" name="prop_swift_code" class="form-control"
+              value="{{ supplier.swift_code if supplier else '' }}"
+              placeholder="e.g. FNBAUS33">
+          </div>
+        </div>
+
+        <hr class="my-3">
+        <div class="mb-3">
+          <label class="form-label fw-600">Notes</label>
+          <textarea name="prop_notes" class="form-control" rows="2"
+            placeholder="Any additional notes...">{{ supplier.notes if supplier else '' }}</textarea>
+        </div>
+      </div>
+      {% endif %}
+
+      {% endif %}
+
+      <!-- Reason for all types -->
+      {% if request_type != 'Deactivate' %}
+      <div class="form-card mt-4">
+        <div class="form-section-title"><i class="bi bi-chat-text me-1"></i>Reason / Justification</div>
+        <textarea name="reason" class="form-control" rows="2"
+          placeholder="Briefly explain why this change is needed (optional)..."></textarea>
+      </div>
+      {% endif %}
+
+    </div><!-- /col-lg-8 -->
+
+    <!-- Right column: info card -->
+    <div class="col-lg-4">
+      <div class="form-card" style="background:#EBF3FB;border:1px solid #BDD7EE;">
+        <div class="fw-700 mb-2" style="font-size:12px;color:#1F4E79;text-transform:uppercase;letter-spacing:.05em;">
+          <i class="bi bi-info-circle me-1"></i>Approval Workflow
+        </div>
+        <div class="mb-2 p-2 rounded" style="background:#fff;">
+          <div class="fw-600" style="font-size:12px;">Step 1 — Ops Manager</div>
+          <div style="font-size:11px;color:#555;margin-top:2px;">Reviews and gives first approval</div>
+        </div>
+        <div class="p-2 rounded" style="background:#fff;">
+          <div class="fw-600" style="font-size:12px;">Step 2 — Finance Manager</div>
+          <div style="font-size:11px;color:#555;margin-top:2px;">Final sign-off; changes applied on approval</div>
+        </div>
+        <hr style="border-color:#BDD7EE;">
+        <div style="font-size:11px;color:#555;">
+          <i class="bi bi-shield-check me-1"></i>
+          {% if request_type == 'New' %}A new supplier ID will be assigned automatically on approval.
+          {% elif request_type == 'Edit' %}Current supplier data will be updated only when Finance Manager approves.
+          {% else %}Supplier will be marked Inactive on final approval.{% endif %}
+        </div>
+      </div>
+
+      {% if request_type == 'Edit' and supplier %}
+      <div class="form-card mt-3" style="background:#FFF9E6;border:1px solid #FFD700;">
+        <div class="fw-700 mb-2" style="font-size:12px;color:#856404;text-transform:uppercase;letter-spacing:.05em;">
+          <i class="bi bi-building me-1"></i>Current Data
+        </div>
+        <div style="font-size:12px;">
+          <div><span class="text-muted">ID:</span> <strong>{{ supplier.supplier_id }}</strong></div>
+          <div><span class="text-muted">Name:</span> {{ supplier.name }}</div>
+          <div><span class="text-muted">Contact:</span> {{ supplier.contact_name or '—' }}</div>
+          <div><span class="text-muted">Email:</span> {{ supplier.email or '—' }}</div>
+          <div><span class="text-muted">Terms:</span> {{ supplier.payment_terms or '—' }}</div>
+          <div><span class="text-muted">Lead Days:</span> {{ supplier.lead_days or '—' }}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div><!-- /col-lg-4 -->
+  </div><!-- /row -->
+
+  <!-- Footer buttons -->
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-send me-1"></i>Submit for Approval
+    </button>
+    <a href="{{ url_for('supplier_list') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Cancel
+    </a>
+  </div>
+</form>
+{% endblock %}

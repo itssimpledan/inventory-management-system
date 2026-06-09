@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Log Movement{% endblock %}
+{% block page_title %}<i class="bi bi-plus-circle me-2" style="color:#2E75B6"></i>Log Inventory Movement{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('ledger') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="form-card">
+      <form method="POST" id="ledgerForm">
+        <div class="form-section-title"><i class="bi bi-journal-plus me-2"></i>Transaction Details</div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-600">Transaction Type <span class="text-danger">*</span></label>
+            <select name="txn_type" id="txn_type" class="form-select" required onchange="onTypeChange()">
+              <option value="">Select type…</option>
+              {% for t in txn_types %}
+              <option value="{{ t }}" {% if request.args.get('type') == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Date <span class="text-danger">*</span></label>
+            <input type="date" name="txn_date" class="form-control" value="{{ today }}" required>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-600">Item / SKU <span class="text-danger">*</span></label>
+            <select name="item_id" id="item_id" class="form-select" required onchange="fetchFIFOCost()">
+              <option value="">Select item…</option>
+              {% for i in items %}
+              <option value="{{ i.item_id }}" {% if request.args.get('item') == i.item_id %}selected{% endif %}>{{ i.item_id }} — {{ i.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Reference</label>
+            <input type="text" name="reference" class="form-control" placeholder="PO #, Invoice #, ADJ-…"
+                   value="{{ request.args.get('ref','') }}">
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4" id="qty_in_group">
+            <label class="form-label fw-600 text-success">Qty In</label>
+            <input type="number" name="qty_in" id="qty_in" class="form-control" min="0" step="1" value="0" oninput="recalc()">
+          </div>
+          <div class="col-md-4" id="qty_out_group">
+            <label class="form-label fw-600 text-danger">Qty Out</label>
+            <input type="number" name="qty_out" id="qty_out" class="form-control" min="0" step="1" value="0" oninput="recalc()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">Unit Cost ($)
+              <span id="fifo_hint" class="text-muted" style="font-size:11px;font-weight:400;"></span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" name="unit_cost" id="unit_cost" class="form-control" step="0.0001" min="0" oninput="recalc()" required>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live total -->
+        <div id="live_summary" class="rounded p-3 mb-3" style="background:#F4F6F9;display:none;">
+          <div class="d-flex justify-content-between">
+            <span class="text-muted" style="font-size:13px;">Total Value</span>
+            <span id="live_value" class="fw-700" style="font-size:15px;color:#1F4E79;"></span>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-600">Notes</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes…"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-journal-check me-2"></i>Record Transaction
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>Quick Reference</div>
+      <div style="font-size:12px;">
+        <table class="table table-sm">
+          <thead><tr><th>Type</th><th>Dir</th><th>Unit Cost</th><th>Posts to</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="badge-status s-received">(+) Inbound</span></td>
+              <td class="text-success fw-600">In</td>
+              <td>Enter manually</td>
+              <td>Dr Inventory / Cr Shrinkage</td>
+            </tr>
+            <tr>
+              <td><span class="badge-status s-pending">(+) Adjustment</span></td>
+              <td class="text-success fw-600">In</td>
+              <td>Enter manually</td>
+              <td>Dr Inventory / Cr Shrinkage</td>
+            </tr>
+            <tr>
+              <td><span class="badge-status s-deposit">(-) Sale</span></td>
+              <td class="text-danger fw-600">Out</td>
+              <td>Auto FIFO ←</td>
+              <td>Dr Cost of Sales / Cr Inventory</td>
+            </tr>
+            <tr>
+              <td><span class="badge-status s-cancelled">(-) Adjustment</span></td>
+              <td class="text-danger fw-600">Out</td>
+              <td>Auto FIFO ←</td>
+              <td>Dr Shrinkage / Cr Inventory</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="alert alert-info py-2 mt-2" style="font-size:12px;">
+          <i class="bi bi-lightbulb me-1"></i>
+          For outgoing types, the <strong>oldest FIFO layer cost</strong> is auto-filled when you select an item.
+        </div>
+        <div class="alert alert-warning py-2 mt-2" style="font-size:12px;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          <strong>PO Receipts</strong> are recorded automatically when goods are received on a PO — do not enter them here manually.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const OUT_TYPES = ['(-) Sale','(-) Adjustment – Stockcount','(-) Adjustment – Others',
+                   'Sale','Shrinkage','Adjustment – Out','Write-off'];
+const IN_TYPES  = ['(+) Inbound','(+) Adjustment – Stockcount','(+) Adjustment – Others',
+                   'PO Receipt','Adjustment – In','Opening Balance'];
+
+function onTypeChange() {
+  const t = document.getElementById('txn_type').value;
+  if (OUT_TYPES.includes(t)) {
+    document.getElementById('qty_in').value  = 0;
+    document.getElementById('qty_out').value = '';
+    fetchFIFOCost();
+  } else if (IN_TYPES.includes(t)) {
+    document.getElementById('qty_out').value = 0;
+    document.getElementById('qty_in').value  = '';
+  }
+  recalc();
+}
+
+function fetchFIFOCost() {
+  const item = document.getElementById('item_id').value;
+  const type = document.getElementById('txn_type').value;
+  if (!item || !OUT_TYPES.includes(type)) return;
+  fetch('/api/fifo-cost/' + item)
+    .then(r => r.json())
+    .then(d => {
+      if (d.fifo_cost > 0) {
+        document.getElementById('unit_cost').value = d.fifo_cost.toFixed(4);
+        document.getElementById('fifo_hint').textContent = '← auto-filled from FIFO';
+        recalc();
+      }
+    });
+}
+
+function recalc() {
+  const qi = parseFloat(document.getElementById('qty_in').value)  || 0;
+  const qo = parseFloat(document.getElementById('qty_out').value) || 0;
+  const uc = parseFloat(document.getElementById('unit_cost').value) || 0;
+  const qty = qi > 0 ? qi : qo;
+  const val = qty * uc;
+  if (qty > 0 && uc > 0) {
+    document.getElementById('live_value').textContent = '$' + val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('live_summary').style.display = 'block';
+  } else {
+    document.getElementById('live_summary').style.display = 'none';
+  }
+}
+
+// Pre-fill if coming from PO detail
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('type')) {
+    document.getElementById('txn_type').value = params.get('type');
+    onTypeChange();
+  }
+});
+</script>
+{% endblock %}

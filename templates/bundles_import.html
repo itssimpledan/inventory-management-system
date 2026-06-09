@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Import Bundles / Kits{% endblock %}
+{% block page_title %}<i class="bi bi-cloud-upload me-2" style="color:#2E75B6"></i>Import Bundles / Kits{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('bundle_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Bundles</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+
+    {% if result %}
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-check2-circle me-2" style="color:#1a7f3c"></i>Import Complete</div>
+      <div class="row g-3 mb-3">
+        <div class="col-4">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#1F4E79">{{ result.created }}</div>
+            <div style="font-size:12px;color:#555;">New bundles created</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#2E75B6">{{ result.updated }}</div>
+            <div style="font-size:12px;color:#555;">Existing updated</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#888">{{ result.skipped }}</div>
+            <div style="font-size:12px;color:#555;">Rows skipped</div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('bundle_list') }}" class="btn btn-primary"><i class="bi bi-collection me-1"></i>View Bundles</a>
+        <a href="{{ url_for('bundles_import') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat me-1"></i>Import Another</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Upload Bundles / Kits</div>
+      <p style="font-size:13px;color:#555;margin-bottom:16px;">
+        Upload a CSV or Excel file with bundle definitions. Existing bundles are updated (components replaced); new ones are created.
+        <a href="{{ url_for('template_download', name='bundles') }}" class="ms-1" style="font-size:12px;">
+          <i class="bi bi-download me-1"></i>Download template
+        </a>
+      </p>
+      <form method="POST" enctype="multipart/form-data">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-600">File <span class="text-danger">*</span></label>
+            <input type="file" name="bundles_file" class="form-control" accept=".csv,.xlsx,.xls" required>
+            <small class="text-muted">Accepts .csv, .xlsx, or .xls</small>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-cloud-upload me-1"></i>Import</button>
+            <a href="{{ url_for('bundle_list') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="form-card mt-3">
+      <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>Expected Columns</div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead><tr style="background:#f0f4f8;"><th>Column</th><th>Required</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td class="fw-600">bundle_id</td><td><span class="badge bg-danger">Required</span></td><td>NPR-BOXSET-001</td></tr>
+          <tr><td>description</td><td><span class="badge bg-secondary">Optional</span></td><td>Shampoo + Conditioner Set</td></tr>
+          <tr><td>brand</td><td><span class="badge bg-secondary">Optional</span></td><td>andSons</td></tr>
+          <tr><td class="fw-600">sku_1</td><td><span class="badge bg-warning text-dark">Min 1 SKU</span></td><td>NPR-SHP-200ml</td></tr>
+          <tr><td>sku_2</td><td><span class="badge bg-secondary">Optional</span></td><td>NPR-COND-200ml</td></tr>
+          <tr><td>sku_3</td><td><span class="badge bg-secondary">Optional</span></td><td>NPR-SERUM-30ml</td></tr>
+          <tr><td>sku_4</td><td><span class="badge bg-secondary">Optional</span></td><td></td></tr>
+          <tr><td>sku_5</td><td><span class="badge bg-secondary">Optional</span></td><td></td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert-info mt-2 mb-0 py-2" style="font-size:12px;">
+        <i class="bi bi-info-circle me-1"></i>All component SKUs default to qty 1. To adjust quantities, edit the bundle after import.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Inventory Management System</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+<style>
+  body { background: linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%); min-height:100vh; display:flex; align-items:center; font-family:Arial,sans-serif; padding:24px 0; }
+  .login-card { background:#fff; border-radius:16px; padding:36px 40px; box-shadow:0 20px 60px rgba(0,0,0,.25); width:100%; max-width:420px; }
+  .logo { text-align:center; margin-bottom:24px; }
+  .logo .icon { width:56px;height:56px;background:#1F4E79;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin-bottom:10px; }
+  .logo h4 { font-weight:700; color:#1F4E79; margin:0; font-size:17px; }
+  .logo p  { color:#888; font-size:12px; margin:3px 0 0; }
+  .form-control { border-radius:8px; padding:10px 14px; font-size:14px; }
+  .form-control:focus { border-color:#2E75B6; box-shadow:0 0 0 .2rem rgba(46,117,182,.2); }
+  .btn-sign-in { background:#1F4E79; border:none; border-radius:8px; padding:11px; font-weight:600; font-size:15px; transition:.2s; }
+  .btn-sign-in:hover { background:#163d61; }
+
+  .test-env-banner {
+    background: linear-gradient(90deg, #FFC000, #FFD740);
+    border-radius:8px; padding:6px 12px; text-align:center;
+    font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:#7a5200; margin-bottom:14px;
+  }
+  .cred-section-title {
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+    color:#aaa; margin:12px 0 5px;
+  }
+  .cred-card {
+    display:flex; align-items:center; gap:10px;
+    border:1px solid #e8e8e8; border-radius:8px; padding:9px 12px;
+    cursor:pointer; transition:.15s; margin-bottom:5px; background:#fafafa;
+  }
+  .cred-card:hover { border-color:#2E75B6; background:#EEF5FB; }
+  .cred-card:hover .cred-icon { background:#2E75B6; color:#fff; }
+  .cred-icon {
+    width:32px; height:32px; border-radius:8px; display:flex; align-items:center;
+    justify-content:center; font-size:14px; flex-shrink:0; transition:.15s;
+  }
+  .ci-admin   { background:#DEEAF1; color:#1F4E79; }
+  .ci-ops     { background:#E2EFDA; color:#375623; }
+  .ci-finance { background:#FFF2CC; color:#7a5200; }
+  .cred-body  { flex:1; min-width:0; }
+  .cred-title { font-size:12px; font-weight:700; color:#333; }
+  .cred-sub   { font-size:11px; color:#888; }
+  .cred-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; white-space:nowrap; }
+  .cb-admin   { background:#DEEAF1; color:#1F4E79; }
+  .cb-ops     { background:#E2EFDA; color:#375623; }
+  .cb-finance { background:#FFF2CC; color:#7a5200; }
+  .click-hint { text-align:center; font-size:10px; color:#bbb; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="container d-flex justify-content-center">
+  <div class="login-card">
+
+    <div class="logo">
+      {% if company_logo %}
+      <img src="{{ url_for('static', filename='uploads/' + company_logo) }}"
+           alt="Logo" style="max-height:64px;max-width:200px;margin-bottom:10px;border-radius:6px;">
+      {% else %}
+      <div class="icon"><i class="bi bi-box-seam"></i></div>
+      {% endif %}
+      <h4>{{ company_name if company_name != 'IMS' else 'Inventory Management' }}</h4>
+      <p>Sign in to continue</p>
+    </div>
+
+    {% for cat, msg in get_flashed_messages(with_categories=true) %}
+    <div class="alert alert-{{ cat }} py-2 mb-3" style="font-size:13px;">{{ msg }}</div>
+    {% endfor %}
+
+    <form method="POST" id="loginForm">
+      <div class="mb-3">
+        <label class="form-label" style="font-size:13px;font-weight:600;">Username</label>
+        <input type="text" name="username" id="usernameField" class="form-control" placeholder="Enter your username" autofocus required>
+      </div>
+      <div class="mb-4">
+        <label class="form-label" style="font-size:13px;font-weight:600;">Password</label>
+        <input type="password" name="password" id="passwordField" class="form-control" placeholder="Enter your password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sign-in w-100 text-white">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+      </button>
+    </form>
+
+    <!-- ── Test Environment Credentials ─────────────────────────────── -->
+    <div class="mt-4">
+      <div class="test-env-banner"><i class="bi bi-flask me-1"></i>Test Environment — Click any account to auto-fill</div>
+
+      <div class="cred-section-title">Admin</div>
+      <div class="cred-card" onclick="fill('daniel','admin123')">
+        <div class="cred-icon ci-admin"><i class="bi bi-shield-check"></i></div>
+        <div class="cred-body">
+          <div class="cred-title">Daniel</div>
+          <div class="cred-sub">daniel &nbsp;·&nbsp; admin123</div>
+        </div>
+        <span class="cred-badge cb-admin">Admin</span>
+      </div>
+
+      <div class="cred-section-title">Operations</div>
+      <div class="cred-card" onclick="fill('operations_manager','test123')">
+        <div class="cred-icon ci-ops"><i class="bi bi-person-gear"></i></div>
+        <div class="cred-body">
+          <div class="cred-title">Operations Manager</div>
+          <div class="cred-sub">operations_manager &nbsp;·&nbsp; test123</div>
+        </div>
+        <span class="cred-badge cb-ops">Ops Manager</span>
+      </div>
+      <div class="cred-card" onclick="fill('operations_planner','test123')">
+        <div class="cred-icon ci-ops"><i class="bi bi-person-lines-fill"></i></div>
+        <div class="cred-body">
+          <div class="cred-title">Operations Planner</div>
+          <div class="cred-sub">operations_planner &nbsp;·&nbsp; test123</div>
+        </div>
+        <span class="cred-badge cb-ops">Ops Planner</span>
+      </div>
+      <div class="cred-card" onclick="fill('operations_exec','test123')">
+        <div class="cred-icon ci-ops"><i class="bi bi-box-seam"></i></div>
+        <div class="cred-body">
+          <div class="cred-title">Operations Exec</div>
+          <div class="cred-sub">operations_exec &nbsp;·&nbsp; test123</div>
+        </div>
+        <span class="cred-badge cb-ops">Ops Exec</span>
+      </div>
+
+      <div class="cred-section-title">Finance</div>
+      <div class="cred-card" onclick="fill('finance_manager','test123')">
+        <div class="cred-icon ci-finance"><i class="bi bi-graph-up"></i></div>
+        <div class="cred-body">
+          <div class="cred-title">Finance Manager</div>
+          <div class="cred-sub">finance_manager &nbsp;·&nbsp; test123</div>
+        </div>
+        <span class="cred-badge cb-finance">Finance Manager</span>
+      </div>
+      <div class="cred-card" onclick="fill('finance_exec','test123')">
+        <div class="cred-icon ci-finance"><i class="bi bi-receipt"></i></div>
+        <div class="cred-body">
+          <div class="cred-title">Finance Exec</div>
+          <div class="cred-sub">finance_exec &nbsp;·&nbsp; test123</div>
+        </div>
+        <span class="cred-badge cb-finance">Finance Exec</span>
+      </div>
+
+      <div class="click-hint"><i class="bi bi-cursor me-1"></i>Click a card, then press Sign In</div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script>
+function fill(user, pass) {
+  document.getElementById('usernameField').value = user;
+  document.getElementById('passwordField').value = pass;
+  const btn = document.querySelector('.btn-sign-in');
+  btn.style.background = '#2E75B6';
+  setTimeout(() => btn.style.background = '', 350);
+}
+</script>
+</body>
+</html>

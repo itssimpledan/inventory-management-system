@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% block title %}Sales Methodology SOP{% endblock %}
+{% block page_title %}<i class="bi bi-journal-bookmark me-2" style="color:#2E75B6"></i>Sales Methodology SOP{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('sales_upload') }}" class="btn btn-sm btn-outline-primary me-2"><i class="bi bi-upload me-1"></i>Upload File</a>
+  <a href="{{ url_for('sales_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Sales</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+
+    {# ── Intro banner ───────────────────────────────────────────────────────── #}
+    <div class="form-card mb-4" style="border-left:4px solid #1F4E79;">
+      <div class="p-3">
+        <div style="font-weight:700;font-size:15px;color:#1F4E79;margin-bottom:6px;">
+          <i class="bi bi-shield-check me-2"></i>About This Document
+        </div>
+        <p class="mb-2" style="font-size:13px;color:#444;">
+          This SOP defines the calculation methodology for each sales platform and file type supported by the Inventory Management System.
+          It is the single source of truth for how raw platform exports are transformed into accounting entries.
+        </p>
+        <p class="mb-0" style="font-size:12px;color:#888;">
+          Last updated: May 2025 &nbsp;·&nbsp; Maintained by: Finance &amp; Operations
+        </p>
+      </div>
+    </div>
+
+    {# ── TOC ────────────────────────────────────────────────────────────────── #}
+    <div class="form-card mb-4">
+      <div class="form-section-title"><i class="bi bi-list-ul me-2"></i>Contents</div>
+      <div style="font-size:13px;line-height:2;">
+        <a href="#atome-overview" class="d-block text-decoration-none" style="color:#1F4E79;">
+          <i class="bi bi-chevron-right me-1"></i>1. Atome (BNPL Gateway)
+        </a>
+        <a href="#atome-transaction" class="d-block text-decoration-none ms-3" style="color:#555;">
+          1a. Transaction File (<em>transactions_</em> export)
+        </a>
+        <a href="#atome-payment" class="d-block text-decoration-none ms-3" style="color:#555;">
+          1b. Payment File (<em>payout_list_</em> export)
+        </a>
+        <a href="#atome-reconciliation" class="d-block text-decoration-none ms-3" style="color:#555;">
+          1c. Month-End Reconciliation Checklist
+        </a>
+        <a href="#other-platforms" class="d-block text-decoration-none mt-1" style="color:#1F4E79;">
+          <i class="bi bi-chevron-right me-1"></i>2. Other Platforms (Pending)
+        </a>
+        <a href="#gst-reference" class="d-block text-decoration-none mt-1" style="color:#1F4E79;">
+          <i class="bi bi-chevron-right me-1"></i>3. GST Reference
+        </a>
+      </div>
+    </div>
+
+    {# ════════════════════════════════════════════════════════════════════════
+       SECTION 1: ATOME
+    ════════════════════════════════════════════════════════════════════════ #}
+    <div class="d-flex align-items-center mb-3" id="atome-overview">
+      <span style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1F4E79;">1. Atome (BNPL Payment Gateway)</span>
+      <hr class="flex-grow-1 ms-3 me-0" style="border-color:#BDD7EE;">
+    </div>
+
+    <div class="form-card mb-3" style="font-size:13px;color:#444;">
+      <div class="p-3">
+        <p class="mb-2">
+          <strong>Atome</strong> is a Buy Now Pay Later (BNPL) gateway. It collects payment from the customer in instalments
+          and disburses funds to the merchant minus its fees.
+          Two reports are exported from the Atome merchant portal each month:
+        </p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div style="background:#EFF6FF;border:1px solid #BDD7EE;border-radius:8px;padding:14px;">
+              <div style="font-weight:700;color:#1F4E79;margin-bottom:4px;"><i class="bi bi-receipt me-2"></i>Transaction File</div>
+              <div style="font-size:12px;color:#555;">Filename prefix: <code>transactions_</code></div>
+              <div style="font-size:12px;color:#555;margin-top:6px;">One row per customer transaction (sale or refund). Records
+              revenue, GST, and whether the amount is still receivable (CONFIRMED) or already settled (FULLY_SETTLED).</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div style="background:#EDF7EE;border:1px solid #C6E0B4;border-radius:8px;padding:14px;">
+              <div style="font-weight:700;color:#375623;margin-bottom:4px;"><i class="bi bi-bank me-2"></i>Payment File</div>
+              <div style="font-size:12px;color:#555;">Filename prefix: <code>payout_list_</code></div>
+              <div style="font-size:12px;color:#555;margin-top:6px;">One row per payout batch disbursed to our bank account.
+              Records gross sales in that batch, all Atome fees (MDR + flat), sponsored vouchers, rebates, and net cash received.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── 1a. Transaction File ──────────────────────────────────────────────── #}
+    <div class="form-card mb-4" id="atome-transaction">
+      <div class="p-3 d-flex align-items-center" style="background:#EFF6FF;border-bottom:1px solid #BDD7EE;border-radius:8px 8px 0 0;">
+        <span style="font-weight:700;font-size:14px;color:#1F4E79;"><i class="bi bi-receipt me-2"></i>1a. Atome Transaction File</span>
+        <span style="margin-left:auto;font-size:11px;color:#555;background:#fff;border:1px solid #BDD7EE;border-radius:4px;padding:2px 8px;">transactions_ export</span>
+      </div>
+      <div class="p-3">
+
+        <div class="mb-4">
+          <div style="font-weight:700;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Source Columns Used</div>
+          <table class="table table-sm mb-0" style="font-size:12px;">
+            <thead><tr style="background:#f0f4f8;">
+              <th>Column Header</th><th>Description</th><th>Notes</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="fw-600">Transaction ID</td><td>Unique transaction reference</td><td>Stored as product_name / transaction identifier</td></tr>
+              <tr><td class="fw-600">Transaction Type</td><td>MERCHANT_PAYMENT or REFUND</td><td>Used to separate sales from refund rows</td></tr>
+              <tr><td class="fw-600">Transaction Status</td><td>CONFIRMED or FULLY_SETTLED</td><td>Determines AR vs cash treatment</td></tr>
+              <tr><td class="fw-600">Transaction Amount</td><td>Gross amount incl. 9% GST</td><td>Consumer-facing price, primary revenue figure</td></tr>
+              <tr><td class="fw-600">Amount Receivable</td><td>Amount Atome owes the merchant</td><td>Net of fees; CONFIRMED = AR, FULLY_SETTLED = cash</td></tr>
+              <tr><td class="fw-600">MDR Fee</td><td>Merchant Discount Rate charge</td><td>Percentage-based fee on transaction amount</td></tr>
+              <tr><td class="fw-600">Flat Fee</td><td>Fixed per-transaction charge</td><td>Flat fee regardless of order size</td></tr>
+              <tr><td class="fw-600">E-commerce Platform</td><td>Source platform (Shopify, Lazada, etc.)</td><td>Used for brand split logic</td></tr>
+              <tr><td class="fw-600">Merchant Ref 1</td><td>Merchant's order reference</td><td>Optional cross-reference to platform order</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mb-4">
+          <div style="font-weight:700;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Calculation Steps</div>
+          <table class="table table-sm mb-0" style="font-size:12px;">
+            <thead><tr style="background:#f0f4f8;">
+              <th>#</th><th>Field Produced</th><th>Formula</th><th>Purpose</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td class="text-muted">1</td>
+                <td class="fw-600">GST on Revenue</td>
+                <td><code>tx_amount × (9 ÷ 109)</code></td>
+                <td>Extract GST portion from the GST-inclusive transaction amount</td>
+              </tr>
+              <tr>
+                <td class="text-muted">2</td>
+                <td class="fw-600">Revenue (ex-GST)</td>
+                <td><code>tx_amount − gst_on_revenue</code></td>
+                <td>Net revenue before GST — the P&amp;L revenue line</td>
+              </tr>
+              <tr>
+                <td class="text-muted">3</td>
+                <td class="fw-600">Expenses (MDR + Flat)</td>
+                <td><code>abs(mdr_fee) + abs(flat_fee)</code></td>
+                <td>Total platform fees charged (already ex-GST in Atome's file)</td>
+              </tr>
+              <tr>
+                <td class="text-muted">4</td>
+                <td class="fw-600">AR Balance</td>
+                <td><code>amt_receivable where status = CONFIRMED</code></td>
+                <td>Amount still owed by Atome — booked to Accounts Receivable</td>
+              </tr>
+              <tr>
+                <td class="text-muted">5</td>
+                <td class="fw-600">Cash Received</td>
+                <td><code>amt_receivable where status = FULLY_SETTLED</code></td>
+                <td>Cash already disbursed to our bank account</td>
+              </tr>
+              <tr>
+                <td class="text-muted">6</td>
+                <td class="fw-600">Brand Split</td>
+                <td>Derived from E-commerce Platform column mapping</td>
+                <td>Allocates revenue to AndSons or MM brand for management reporting</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mb-3">
+          <div style="font-weight:700;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Accounting Entries — per Transaction Row</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div style="background:#EFF6FF;border:1px solid #BDD7EE;border-radius:8px;padding:14px;">
+                <div style="font-weight:700;color:#1F4E79;margin-bottom:8px;font-size:12px;">Revenue Recognition Entry</div>
+                <table class="table table-sm mb-0" style="font-size:12px;">
+                  <tbody>
+                    <tr>
+                      <td class="fw-600" style="color:#375623;">DR Accounts Receivable (Atome)</td>
+                      <td class="text-end" style="color:#375623;">tx_amount</td>
+                    </tr>
+                    <tr>
+                      <td style="color:#842029;padding-left:20px;">CR Revenue (ex-GST)</td>
+                      <td class="text-end" style="color:#842029;">revenue_ex_gst</td>
+                    </tr>
+                    <tr>
+                      <td style="color:#842029;padding-left:20px;">CR GST Payable</td>
+                      <td class="text-end" style="color:#842029;">gst_on_revenue</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div style="font-size:11px;color:#888;margin-top:6px;">Booked for every MERCHANT_PAYMENT row regardless of settlement status.</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div style="background:#FFF5F5;border:1px solid #F5C2C7;border-radius:8px;padding:14px;">
+                <div style="font-weight:700;color:#842029;margin-bottom:8px;font-size:12px;">Platform Fee Entry</div>
+                <table class="table table-sm mb-0" style="font-size:12px;">
+                  <tbody>
+                    <tr>
+                      <td class="fw-600" style="color:#375623;">DR Platform Fees Expense</td>
+                      <td class="text-end" style="color:#375623;">expenses_total</td>
+                    </tr>
+                    <tr>
+                      <td style="color:#842029;padding-left:20px;">CR Accounts Receivable (Atome)</td>
+                      <td class="text-end" style="color:#842029;">expenses_total</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div style="font-size:11px;color:#888;margin-top:6px;">Atome deducts fees from the AR balance. The net AR is what gets settled in the payment file.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert py-2 mb-0" style="font-size:12px;background:#FFF3CD;border:1px solid #FFCD1A;">
+          <i class="bi bi-lightbulb me-1" style="color:#856404;"></i>
+          <strong style="color:#856404;">Note on COGS:</strong>
+          The Atome transaction file records <em>how</em> a customer paid — not <em>what</em> they bought.
+          COGS must be calculated from the corresponding order export (Shopify, Lazada, etc.) using SKU-level line items
+          matched to this period's FIFO unit cost.
+        </div>
+
+      </div>
+    </div>
+
+    {# ── 1b. Payment File ─────────────────────────────────────────────────── #}
+    <div class="form-card mb-4" id="atome-payment">
+      <div class="p-3 d-flex align-items-center" style="background:#EDF7EE;border-bottom:1px solid #C6E0B4;border-radius:8px 8px 0 0;">
+        <span style="font-weight:700;font-size:14px;color:#375623;"><i class="bi bi-bank me-2"></i>1b. Atome Payment File</span>
+        <span style="margin-left:auto;font-size:11px;color:#555;background:#fff;border:1px solid #C6E0B4;border-radius:4px;padding:2px 8px;">payout_list_ export</span>
+      </div>
+      <div class="p-3">
+
+        <div class="mb-4">
+          <div style="font-weight:700;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Source Columns Used</div>
+          <table class="table table-sm mb-0" style="font-size:12px;">
+            <thead><tr style="background:#f0f4f8;">
+              <th>Column Header</th><th>Description</th><th>Sign Convention</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="fw-600">Payout ID</td><td>Unique identifier for this disbursement batch</td><td>—</td></tr>
+              <tr><td class="fw-600">Payout Date</td><td>Date the batch was disbursed to bank</td><td>—</td></tr>
+              <tr><td class="fw-600">Payout Amount (E+F+G+H)</td><td>Net cash transferred to our bank account</td><td>Positive = cash in</td></tr>
+              <tr><td class="fw-600">Total Sales (E)</td><td>Gross sales included in this payout batch (incl. GST)</td><td>Positive</td></tr>
+              <tr><td class="fw-600">Total Sponsored Voucher Amount (F)</td><td>Voucher subsidy adjustments by Atome</td><td>Usually negative (reduces payout)</td></tr>
+              <tr><td class="fw-600">All Atome Fees (G)</td><td>MDR + flat fees charged on this batch</td><td>Negative (deducted from payout)</td></tr>
+              <tr><td class="fw-600">All Rebates (H)</td><td>Rebates returned to merchant by Atome</td><td>Positive (adds to payout)</td></tr>
+            </tbody>
+          </table>
+          <div class="mt-2" style="font-size:12px;color:#888;font-style:italic;">
+            Arithmetic identity: <strong>E + F + G + H = Payout Amount</strong>. The system flags rows where the variance exceeds $0.02 (rounding tolerance).
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <div style="font-weight:700;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Calculation Steps</div>
+          <table class="table table-sm mb-0" style="font-size:12px;">
+            <thead><tr style="background:#f0f4f8;">
+              <th>#</th><th>Field Produced</th><th>Formula</th><th>Purpose</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td class="text-muted">1</td>
+                <td class="fw-600">Fees Absolute</td>
+                <td><code>abs(All Atome Fees)</code></td>
+                <td>Convert negative fee figure to positive for accounting debit</td>
+              </tr>
+              <tr>
+                <td class="text-muted">2</td>
+                <td class="fw-600">Fees (ex-GST)</td>
+                <td><code>fees_abs ÷ 1.09</code></td>
+                <td>Back-calculate net fee before 9% GST (GST-inclusive rate: 9 ÷ 109)</td>
+              </tr>
+              <tr>
+                <td class="text-muted">3</td>
+                <td class="fw-600">GST on Fees</td>
+                <td><code>fees_abs − fees_ex_gst</code></td>
+                <td>GST component claimable as input tax credit</td>
+              </tr>
+              <tr>
+                <td class="text-muted">4</td>
+                <td class="fw-600">Arithmetic Check</td>
+                <td><code>|E + F + G + H − Payout| ≤ 0.02</code></td>
+                <td>Validates file integrity; flags row if mismatch exceeds $0.02</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mb-3">
+          <div style="font-weight:700;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Accounting Entries — per Payout Batch Row</div>
+          <div style="background:#EDF7EE;border:1px solid #C6E0B4;border-radius:8px;padding:14px;">
+            <div style="font-weight:700;color:#375623;margin-bottom:8px;font-size:12px;">Cash Settlement Entry (clears AR from Transaction File)</div>
+            <table class="table table-sm mb-0" style="font-size:12px;">
+              <tbody>
+                <tr>
+                  <td class="fw-600" style="color:#375623;">DR Cash / Bank</td>
+                  <td class="text-end" style="color:#375623;">Payout Amount</td>
+                  <td style="color:#888;font-size:11px;">Net cash received</td>
+                </tr>
+                <tr>
+                  <td class="fw-600" style="color:#375623;">DR Platform Fees Expense (ex-GST)</td>
+                  <td class="text-end" style="color:#375623;">fees_ex_gst</td>
+                  <td style="color:#888;font-size:11px;">Fee before GST</td>
+                </tr>
+                <tr>
+                  <td class="fw-600" style="color:#375623;">DR GST Input Tax (on Fees)</td>
+                  <td class="text-end" style="color:#375623;">gst_on_fees</td>
+                  <td style="color:#888;font-size:11px;">Claimable input tax credit (9/109 of fees)</td>
+                </tr>
+                <tr id="voucher-row">
+                  <td class="fw-600" style="color:#856404;">DR Sponsored Voucher Expense</td>
+                  <td class="text-end" style="color:#856404;">|sponsored_voucher|</td>
+                  <td style="color:#888;font-size:11px;">If negative in file (reduces payout)</td>
+                </tr>
+                <tr>
+                  <td style="color:#842029;padding-left:20px;">CR Accounts Receivable (Atome)</td>
+                  <td class="text-end" style="color:#842029;">Total Sales</td>
+                  <td style="color:#888;font-size:11px;">Clears the AR raised by the transaction file</td>
+                </tr>
+                <tr id="rebate-row">
+                  <td style="color:#842029;padding-left:20px;">CR Rebate Income</td>
+                  <td class="text-end" style="color:#842029;">rebates</td>
+                  <td style="color:#888;font-size:11px;">If positive in file (increases payout)</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style="font-size:11px;color:#888;margin-top:6px;">
+              Check: Total DR = Total CR. Any imbalance indicates a variance that requires investigation (see Reconciliation section).
+            </div>
+          </div>
+        </div>
+
+        <div class="alert py-2 mb-0" style="font-size:12px;background:#FFF3CD;border:1px solid #FFCD1A;">
+          <i class="bi bi-lightbulb me-1" style="color:#856404;"></i>
+          <strong style="color:#856404;">Timing Note:</strong>
+          Atome may include transactions from prior months in a payout batch. The payment file should be posted using the
+          <em>payout date</em> as the accounting date, not the original transaction date. Differences in timing between
+          the transaction file and payment file are normal and are reconciled via the AR account.
+        </div>
+
+      </div>
+    </div>
+
+    {# ── 1c. Reconciliation Checklist ────────────────────────────────────────#}
+    <div class="form-card mb-4" id="atome-reconciliation">
+      <div class="p-3" style="background:#f0f4f8;border-bottom:1px solid #dee2e6;border-radius:8px 8px 0 0;">
+        <span style="font-weight:700;font-size:14px;color:#1F4E79;"><i class="bi bi-check2-square me-2"></i>1c. Month-End Reconciliation Checklist</span>
+      </div>
+      <div class="p-3">
+        <table class="table table-sm mb-0" style="font-size:12px;">
+          <thead><tr style="background:#f0f4f8;">
+            <th style="width:5%;">#</th><th style="width:50%;">Step</th><th>How to Verify</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td class="text-muted">1</td>
+              <td class="fw-600">Upload both files for the month</td>
+              <td>Sales → Upload Sales File. Upload Transaction file first, then Payment file.</td>
+            </tr>
+            <tr>
+              <td class="text-muted">2</td>
+              <td class="fw-600">Check for flagged rows in each upload</td>
+              <td>Any flagged rows appear in red on the detail page. Investigate and resolve before posting.</td>
+            </tr>
+            <tr>
+              <td class="text-muted">3</td>
+              <td class="fw-600">AR variance: confirm Transaction AR ≈ Payment Total Sales</td>
+              <td>Sum of CONFIRMED amt_receivable in transaction file should reconcile to Total Sales column in payment file (timing differences are expected — track them in the AR sub-ledger).</td>
+            </tr>
+            <tr>
+              <td class="text-muted">4</td>
+              <td class="fw-600">Verify fee GST calculation</td>
+              <td>fees_ex_gst × 1.09 should equal fees_incl_gst (within $0.01 rounding). System flags mismatches automatically.</td>
+            </tr>
+            <tr>
+              <td class="text-muted">5</td>
+              <td class="fw-600">Post journal entries in accounting system</td>
+              <td>Use the indicative entries shown on each upload detail page. Post by brand for management reporting.</td>
+            </tr>
+            <tr>
+              <td class="text-muted">6</td>
+              <td class="fw-600">Upload corresponding order file for COGS</td>
+              <td>Upload the Shopify / platform order export for the same period to calculate cost of sales via FIFO.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# ════════════════════════════════════════════════════════════════════════
+       SECTION 2: OTHER PLATFORMS
+    ════════════════════════════════════════════════════════════════════════ #}
+    <div class="d-flex align-items-center mb-3 mt-2" id="other-platforms">
+      <span style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">2. Other Platforms</span>
+      <hr class="flex-grow-1 ms-3 me-0" style="border-color:#dee2e6;">
+    </div>
+
+    <div class="form-card mb-4">
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead><tr style="background:#f0f4f8;">
+          <th>Platform</th><th>File Types</th><th>Parser Status</th><th>Expected Methodology</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="fw-600">Airwallex</td>
+            <td>Transaction</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending sample file</span></td>
+            <td style="color:#888;">Revenue recognition, FX conversion, settlement fees — methodology to be defined once file format confirmed.</td>
+          </tr>
+          <tr>
+            <td class="fw-600">Stripe (AndSons / GetOva)</td>
+            <td>Balance Transaction, Payout</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending sample file</span></td>
+            <td style="color:#888;">Similar to Atome — revenue per charge, fee per transaction, payout batch settlement.</td>
+          </tr>
+          <tr>
+            <td class="fw-600">Lazada (AndSons / MM)</td>
+            <td>Settlement Statement</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending</span></td>
+            <td style="color:#888;">Lazada provides itemised settlement reports with SKU-level revenue, commissions, and shipping fees.</td>
+          </tr>
+          <tr>
+            <td class="fw-600">Shopee (AndSons / MM)</td>
+            <td>Income Statement</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending</span></td>
+            <td style="color:#888;">Shopee income statement shows order-level settlement with Shopee commissions, service fees, and campaigns.</td>
+          </tr>
+          <tr>
+            <td class="fw-600">Shopify (MM)</td>
+            <td>Payout / Order Export</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending</span></td>
+            <td style="color:#888;">Shopify payouts include order-level revenue with direct SKU data for COGS calculation.</td>
+          </tr>
+          <tr>
+            <td class="fw-600">TikTok (AndSons / MM)</td>
+            <td>Settlement Report</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending</span></td>
+            <td style="color:#888;">TikTok Shop settlement includes creator commissions, platform fees, and product-level data.</td>
+          </tr>
+          <tr>
+            <td class="fw-600">Zalora</td>
+            <td>Remittance Advice</td>
+            <td><span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">Pending</span></td>
+            <td style="color:#888;">Zalora provides a monthly remittance with returns, commissions, and net settlement.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {# ════════════════════════════════════════════════════════════════════════
+       SECTION 3: GST REFERENCE
+    ════════════════════════════════════════════════════════════════════════ #}
+    <div class="d-flex align-items-center mb-3 mt-2" id="gst-reference">
+      <span style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">3. GST Quick Reference</span>
+      <hr class="flex-grow-1 ms-3 me-0" style="border-color:#dee2e6;">
+    </div>
+
+    <div class="form-card mb-4">
+      <div class="p-3" style="font-size:13px;color:#444;">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div style="background:#EFF6FF;border:1px solid #BDD7EE;border-radius:8px;padding:14px;text-align:center;">
+              <div style="font-weight:700;color:#1F4E79;font-size:13px;margin-bottom:4px;">Extract GST from Inclusive Price</div>
+              <div style="font-family:monospace;font-size:14px;background:#fff;border:1px solid #BDD7EE;border-radius:6px;padding:10px;margin:8px 0;">
+                GST = amount × (9 ÷ 109)
+              </div>
+              <div style="font-size:11px;color:#888;">When amount <em>includes</em> GST (e.g. transaction amount)</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div style="background:#EDF7EE;border:1px solid #C6E0B4;border-radius:8px;padding:14px;text-align:center;">
+              <div style="font-weight:700;color:#375623;font-size:13px;margin-bottom:4px;">Add GST to Ex-GST Price</div>
+              <div style="font-family:monospace;font-size:14px;background:#fff;border:1px solid #C6E0B4;border-radius:6px;padding:10px;margin:8px 0;">
+                Incl. GST = amount × 1.09
+              </div>
+              <div style="font-size:11px;color:#888;">When amount is <em>before</em> GST</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div style="background:#FFF5F5;border:1px solid #F5C2C7;border-radius:8px;padding:14px;text-align:center;">
+              <div style="font-weight:700;color:#842029;font-size:13px;margin-bottom:4px;">Back-Calculate Ex-GST from Inclusive</div>
+              <div style="font-family:monospace;font-size:14px;background:#fff;border:1px solid #F5C2C7;border-radius:6px;padding:10px;margin:8px 0;">
+                Ex-GST = amount ÷ 1.09
+              </div>
+              <div style="font-size:11px;color:#888;">Used for Atome fee GST extraction</div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 p-3" style="background:#FFF3CD;border:1px solid #FFCD1A;border-radius:8px;font-size:12px;color:#856404;">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>Singapore GST Rate:</strong> 9% (effective 1 Jan 2024). All calculations in this system use 9% GST.
+          Update this SOP and the parser code if the rate changes.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

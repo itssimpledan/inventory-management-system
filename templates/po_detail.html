@@ -1,0 +1,775 @@
+{% extends "base.html" %}
+{% block title %}{{ po.po_number }}{% endblock %}
+{% block page_title %}
+  <i class="bi bi-file-earmark-text me-2" style="color:#2E75B6"></i>{{ po.po_number }}
+{% endblock %}
+{% block topbar_actions %}
+  {% if request.args.get('ref') == 'calendar' %}
+  <a href="{{ url_for('delivery_calendar') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Calendar</a>
+  {% else %}
+  <a href="{{ url_for('po_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  {% endif %}
+  {% set pdf_approved = po.status in ('Approved','Deposit Paid','Fully Paid – Shipped','Fully Paid – Received','Partially Received','Closed – Partial') %}
+  {% if pdf_approved or role == 'admin' %}
+  <div class="btn-group ms-2">
+    <a href="{{ url_for('po_download', po_id=po.id) }}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-file-earmark-text me-1"></i>Internal PO
+    </a>
+    {# Supplier PDF: admin always; all other roles only once fully approved #}
+    {% if pdf_approved or role == 'admin' %}
+    <a href="{{ url_for('po_download_supplier', po_id=po.id) }}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-send me-1"></i>Supplier PO
+    </a>
+    {% endif %}
+  </div>
+  {% elif po.status not in ('Draft','Cancelled') %}
+  {# All non-admin roles: internal PDF only, supplier PDF locked until approved #}
+  <div class="btn-group ms-2">
+    <a href="{{ url_for('po_download', po_id=po.id) }}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-file-earmark-text me-1"></i>Internal PO
+    </a>
+    <span class="btn btn-sm btn-outline-secondary disabled" title="Available once Finance has approved the PO">
+      <i class="bi bi-lock me-1"></i>Supplier PO
+    </span>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% set role = session.role %}
+
+<div class="row g-3">
+  <!-- Left: PO Details -->
+  <div class="col-lg-8">
+
+    <!-- Header card -->
+    <div class="form-card mb-3">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h5 class="mb-1 fw-700" style="color:#1F4E79;">{{ po.po_number }}</h5>
+          <span class="text-muted" style="font-size:13px;">{{ po.po_date | dateformat }} · Raised by {{ po.raised_by | title }}</span>
+        </div>
+        <span class="badge-status
+          {% if po.status == 'Fully Paid – Received' %}s-received
+          {% elif po.status == 'Deposit Paid' %}s-deposit
+          {% elif po.status == 'Approved' %}s-approved
+          {% elif po.status == 'Ops Approved' %}s-ops-approved
+          {% elif po.status == 'Pending Approval' %}s-pending
+          {% elif po.status == 'Fully Paid – Shipped' %}s-shipped
+          {% elif po.status == 'Partially Received' %}s-partial
+          {% elif po.status == 'Cancelled' %}s-cancelled
+          {% elif po.status == 'Closed – Partial' %}s-closed-partial
+          {% elif po.status == 'Returned' %}s-returned
+          {% else %}s-draft{% endif %}" style="font-size:13px;padding:6px 14px;">{{ po.status }}</span>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="p-3 rounded" style="background:#F8F9FA;">
+            <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Supplier</div>
+            <div class="fw-700 mt-1">{{ po.supplier_name }}</div>
+            <div style="font-size:12px;color:#666;">{{ po.supplier_id }} · {{ po.payment_terms }}</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="p-3 rounded" style="background:#F8F9FA;">
+            <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">SKU Lines</div>
+            <div class="fw-700 mt-1">{{ lines|length }} SKU(s)</div>
+            <div style="font-size:12px;color:#666;">{{ po.currency }} · {{ "{:.0f}%".format((po.deposit_pct or 0)*100) }} deposit</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Line Items Table -->
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-list-ul me-2"></i>SKU Line Items</div>
+      <div class="table-responsive">
+        <table class="table table-sm ims-table sortable mb-0" style="font-size:13px;">
+          <thead><tr>
+            <th>Item ID</th>
+            <th>Description</th>
+            <th>UOM</th>
+            <th class="text-end">Qty Ordered</th>
+            <th class="text-end">Free Units</th>
+            <th class="text-end">Total Qty</th>
+            <th class="text-end">Unit Price</th>
+            <th class="text-end">Subtotal</th>
+            <th class="text-end">Eff. Unit Cost</th>
+          </tr></thead>
+          <tbody>
+            {% for line in lines %}
+            <tr>
+              <td><span style="font-size:12px;background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 6px;font-weight:600;">{{ line.item_id }}</span></td>
+              <td>{{ line.item_name }}</td>
+              <td>{{ line.unit_of_measure }}</td>
+              <td class="text-end">{{ "{:,.0f}".format(line.qty_ordered) }}</td>
+              <td class="text-end">{{ "{:,.0f}".format(line.free_units) }}</td>
+              <td class="text-end fw-700" style="color:#1F4E79;">{{ "{:,.0f}".format(line.total_qty_line) }}</td>
+              <td class="text-end">{{ line.unit_price | currency }}</td>
+              <td class="text-end">{{ line.subtotal | currency }}</td>
+              <td class="text-end fw-700" style="color:#856404;">${{ "%.4f"|format(line.eff_unit_cost) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot style="background:#f0f4f8;font-weight:700;font-size:13px;">
+            <tr>
+              <td colspan="7" class="text-end">Lines Subtotal</td>
+              <td class="text-end">{{ total_sub | currency }}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td colspan="7" class="text-end text-muted" style="font-weight:400;">+ Freight</td>
+              <td class="text-end text-muted" style="font-weight:400;">{{ (po.freight_costs or 0) | currency }}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td colspan="7" class="text-end text-muted" style="font-weight:400;">+ Other Costs</td>
+              <td class="text-end text-muted" style="font-weight:400;">{{ (po.other_costs or 0) | currency }}</td>
+              <td></td>
+            </tr>
+            <tr style="background:#1F4E79;color:#fff;">
+              <td colspan="7" class="text-end">Total PO Value ({{ po.currency }})</td>
+              <td class="text-end" style="font-size:15px;">{{ total_val | currency }}</td>
+              <td class="text-end" style="font-size:11px;">Avg: ${{ "%.4f"|format(eff_cost) }}</td>
+            </tr>
+            <tr style="background:#FFF2CC;">
+              <td colspan="7" class="text-end">Deposit ({{ "{:.0f}%".format((po.deposit_pct or 0)*100) }})</td>
+              <td class="text-end fw-700" style="color:#856404;">{{ deposit_amt | currency }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-calendar-check me-2"></i>Milestone Timeline</div>
+      <div class="table-responsive">
+        <table class="table table-sm" style="font-size:13px;">
+          <thead><tr>
+            <th style="background:#f8f9fa;color:#555;font-weight:600;">Milestone</th>
+            <th style="background:#f8f9fa;color:#555;font-weight:600;">Date</th>
+            <th style="background:#f8f9fa;color:#555;font-weight:600;">By</th>
+            <th style="background:#f8f9fa;color:#555;font-weight:600;">Role</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>PO Raised</td><td>{{ po.po_date | dateformat }}</td><td>{{ po.raised_by | title }}</td><td><span class="role-badge-ops">Ops Planner</span></td></tr>
+            <tr class="{% if po.ops_approved_by %}table-warning{% endif %}">
+              <td>Ops Approval</td>
+              <td>{{ po.ops_approval_date | dateformat if po.ops_approval_date else '—' }}</td>
+              <td>{{ po.ops_approved_by | title if po.ops_approved_by else '—' }}</td>
+              <td><span class="role-badge-ops">Ops Manager</span></td></tr>
+            <tr class="{% if po.approved_by %}table-success{% endif %}">
+              <td>Finance Approval</td>
+              <td>{{ po.approval_date | dateformat if po.approval_date else '—' }}</td>
+              <td>{{ po.approved_by | title if po.approved_by else '—' }}</td>
+              <td><span class="role-badge-finance">Finance Manager</span></td></tr>
+            <tr class="{% if po.deposit_date %}table-info{% endif %}">
+              <td>Deposit / Partial Payment</td>
+              <td>{{ po.deposit_date | dateformat }}</td>
+              <td>{% if po.deposit_date %}{% if po.deposit_paid_by %}{{ po.deposit_paid_by | title }}{% else %}<span class="text-muted fst-italic" style="font-size:11px;">Not recorded</span>{% endif %}{% else %}—{% endif %}</td>
+              <td><span class="role-badge-finance">Finance Exec</span></td></tr>
+            <tr class="{% if po.full_payment_date %}table-info{% endif %}">
+              <td>Fully Paid</td>
+              <td>{{ po.full_payment_date | dateformat }}</td>
+              <td>{% if po.full_payment_date %}{% if po.full_paid_by %}{{ po.full_paid_by | title }}{% else %}<span class="text-muted fst-italic" style="font-size:11px;">Not recorded</span>{% endif %}{% else %}—{% endif %}</td>
+              <td><span class="role-badge-finance">Finance Exec</span></td></tr>
+            <tr><td>Expected Delivery</td><td>{{ po.expected_delivery_date | dateformat }}</td><td>—</td><td>—</td></tr>
+            <tr class="{% if po.payment_due_date and po.payment_due_date < today_str and po.status not in ('Fully Paid – Shipped','Fully Paid – Received','Cancelled') %}table-danger{% endif %}">
+              <td><strong>Payment Due</strong></td>
+              <td>{% if po.payment_due_date %}<strong>{{ po.payment_due_date | dateformat }}</strong>{% else %}—{% endif %}</td>
+              <td>—</td><td>—</td></tr>
+            <tr class="{% if po.status == 'Fully Paid – Received' %}table-success{% elif po.status == 'Partially Received' %}table-warning{% endif %}">
+              <td>Goods Received
+                {% if po.status == 'Partially Received' %}
+                <span style="background:#F3E5F5;color:#6A1B9A;border-radius:3px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;">Partial</span>
+                {% endif %}
+              </td>
+              <td>{{ po.received_date | dateformat }}{% if po.received_qty %} · {{ "{:,.0f}".format(po.received_qty) }} units rcvd{% endif %}</td>
+              <td>{% if po.received_date %}{% if po.received_by %}{{ po.received_by | title }}{% else %}<span class="text-muted fst-italic" style="font-size:11px;">Not recorded</span>{% endif %}{% else %}—{% endif %}</td>
+              <td><span class="role-badge-ops">Ops Exec / Planner</span></td></tr>
+            {% if po.partial_closed_at or po.status == 'Closed – Partial' %}
+            <tr style="background:#EAF4FB;">
+              <td style="color:#1a5276;font-weight:700;">
+                <i class="bi bi-archive-fill me-1" style="color:#2E75B6;"></i>PO Closed — Partial Receipt
+                {% if po.partial_close_reason %}
+                <div style="font-size:11px;font-weight:400;color:#2c5f7a;margin-top:2px;">{{ po.partial_close_reason }}</div>
+                {% endif %}
+              </td>
+              <td style="color:#1a5276;font-weight:600;">{{ po.partial_closed_at | dateformat if po.partial_closed_at else '—' }}</td>
+              <td style="color:#1a5276;">{{ po.partial_closed_by | title if po.partial_closed_by else '—' }}</td>
+              <td><span style="background:#D6EAF8;color:#1a5276;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">Closed</span></td>
+            </tr>
+            {% endif %}
+            {% if po.status == 'Cancelled' %}
+            <tr style="background:#FDEEEE;">
+              <td style="color:#842029;font-weight:700;">
+                <i class="bi bi-x-circle-fill me-1" style="color:#dc3545;"></i>PO Cancelled
+                {% if po.cancel_reason %}
+                <div style="font-size:11px;font-weight:400;color:#6c3333;margin-top:2px;">Reason: {{ po.cancel_reason }}</div>
+                {% endif %}
+                {% if po.amount_paid and po.amount_paid > 0 %}
+                <div style="font-size:11px;font-weight:600;color:#842029;margin-top:2px;">
+                  <i class="bi bi-exclamation-triangle-fill me-1"></i>Payment of ${{ "{:,.2f}".format(po.amount_paid) }} already recorded — supplier follow-up required
+                </div>
+                {% endif %}
+              </td>
+              <td style="color:#842029;font-weight:600;">{{ po.cancelled_at | dateformat }}</td>
+              <td style="color:#842029;">{{ po.cancelled_by | title if po.cancelled_by else '—' }}</td>
+              <td><span style="background:#F8D7DA;color:#842029;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">Cancelled</span></td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if po.notes %}
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-sticky me-2"></i>Notes</div>
+      {% if po.status == 'Returned' %}
+      <div class="alert mb-2 py-2 px-3" style="background:#FFE5B4;border:1px solid #FFB347;border-radius:6px;font-size:13px;color:#7a3800;">
+        <i class="bi bi-exclamation-triangle me-1"></i><strong>Returned for amendment.</strong> Please review the note below before resubmitting.
+      </div>
+      {% endif %}
+      <p class="mb-0" style="font-size:13px;white-space:pre-wrap;">{{ po.notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- ── Documents ──────────────────────────────────────────────────────── -->
+    <div class="form-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="form-section-title mb-0"><i class="bi bi-paperclip me-2"></i>Supporting Documents</div>
+        <span style="font-size:12px;color:#888;">{{ po_docs|length }} file(s)</span>
+      </div>
+
+      <!-- Upload form — ops_planner, ops_exec, admin only -->
+      {% if role in ('admin','ops_planner','ops_exec') %}
+      <form method="POST" action="{{ url_for('po_upload_doc', po_id=po.id) }}"
+            enctype="multipart/form-data" class="mb-3 p-3 rounded" style="background:#F8F9FA;border:1px dashed #BDD7EE;">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label" style="font-size:12px;font-weight:600;">Document Type</label>
+            <select name="doc_type" class="form-select form-select-sm">
+              <option value="Tax Invoice">Tax Invoice</option>
+              <option value="Delivery Order">Delivery Order</option>
+              <option value="Packing List">Packing List</option>
+              <option value="Bill of Lading">Bill of Lading</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label" style="font-size:12px;font-weight:600;">File <span class="text-muted">(PDF, JPG, PNG, DOCX, XLSX…)</span></label>
+            <input type="file" name="doc_file" class="form-control form-control-sm"
+                   accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" style="font-size:12px;font-weight:600;">Notes <span class="text-muted">(optional)</span></label>
+            <input type="text" name="doc_notes" class="form-control form-control-sm" placeholder="e.g. Inv #INV-2025-001">
+          </div>
+          <div class="col-12 text-end">
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-upload me-1"></i>Upload Document
+            </button>
+          </div>
+        </div>
+      </form>
+      {% endif %}
+
+      <!-- Document list -->
+      {% if po_docs %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <thead>
+            <tr style="background:#F0F4F8;">
+              <th>Type</th>
+              <th>Filename</th>
+              <th>Notes</th>
+              <th>Uploaded By</th>
+              <th>Date</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in po_docs %}
+            <tr>
+              <td>
+                {% if doc.doc_type == 'Tax Invoice' %}
+                  <span style="background:#D4EDDA;color:#155724;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">Tax Invoice</span>
+                {% elif doc.doc_type == 'Delivery Order' %}
+                  <span style="background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">Delivery Order</span>
+                {% elif doc.doc_type == 'Packing List' %}
+                  <span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">Packing List</span>
+                {% elif doc.doc_type == 'Bill of Lading' %}
+                  <span style="background:#E2D9F3;color:#4B0082;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">Bill of Lading</span>
+                {% else %}
+                  <span style="background:#E9ECEF;color:#495057;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">Other</span>
+                {% endif %}
+              </td>
+              <td>
+                <i class="bi bi-file-earmark me-1 text-muted"></i>
+                <span style="word-break:break-all;">{{ doc.original_name }}</span>
+              </td>
+              <td style="color:#666;">{{ doc.notes or '—' }}</td>
+              <td>{{ doc.uploaded_by | title }}</td>
+              <td style="white-space:nowrap;">{{ doc.uploaded_at[:10] if doc.uploaded_at else '—' }}</td>
+              <td class="text-end">
+                <div class="d-flex gap-1 justify-content-end">
+                  <a href="{{ url_for('po_download_doc', po_id=po.id, doc_id=doc.id) }}"
+                     class="btn btn-sm btn-outline-primary py-0 px-2" title="Download">
+                    <i class="bi bi-download"></i>
+                  </a>
+                  {% if role in ('admin','ops_planner','ops_exec') %}
+                  <form method="POST" action="{{ url_for('po_delete_doc', po_id=po.id, doc_id=doc.id) }}"
+                        onsubmit="return confirm('Delete \'{{ doc.original_name }}\'?')" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-3" style="color:#aaa;font-size:13px;">
+        <i class="bi bi-inbox" style="font-size:24px;display:block;margin-bottom:6px;"></i>
+        No documents uploaded yet.
+        {% if role in ('admin','ops_planner','ops_exec') %}Use the form above to attach a tax invoice or delivery order.{% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Finance note -->
+      {% if role in ('finance_exec','finance_manager','finance_controller') %}
+      <div class="mt-3 p-2 rounded" style="background:#EFF8FF;border-left:3px solid #2E75B6;font-size:12px;color:#1F4E79;">
+        <i class="bi bi-info-circle me-1"></i>Download supplier documents above before processing payment.
+        Tax invoices must be verified before releasing funds.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right: Actions Panel -->
+  <div class="col-lg-4">
+    <div class="form-card" style="position:sticky;top:80px;">
+      <div class="form-section-title"><i class="bi bi-lightning me-2"></i>Actions</div>
+
+      {% if po.status == 'Closed – Partial' %}
+        <div class="alert py-2 px-3" style="background:#EAF4FB;border:1px solid #AED6F1;border-radius:6px;font-size:13px;color:#1a5276;">
+          <i class="bi bi-archive-fill me-1"></i><strong>This PO has been closed as a partial receipt.</strong>
+          {% if po.partial_closed_by %} Closed by {{ po.partial_closed_by | title }} on {{ po.partial_closed_at | dateformat }}.{% endif %}
+          {% if po.partial_close_reason %}<div class="mt-1"><em>{{ po.partial_close_reason }}</em></div>{% endif %}
+        </div>
+      {% endif %}
+
+      {% if po.status == 'Cancelled' %}
+        <div class="alert py-2 px-3" style="background:#F8D7DA;border:1px solid #F5C6CB;border-radius:6px;font-size:13px;color:#721C24;">
+          <i class="bi bi-x-circle-fill me-1"></i><strong>This PO has been cancelled.</strong>
+          {% if po.cancelled_by %} Cancelled by {{ po.cancelled_by | title }} on {{ po.cancelled_at | dateformat }}.{% endif %}
+          {% if po.cancel_reason %}<div class="mt-1"><em>Reason: {{ po.cancel_reason }}</em></div>{% endif %}
+        </div>
+        {% if po.cancellation_resolution == 'Pending' and role in ('admin','finance_exec','finance_manager') %}
+        <div class="mt-2 p-3 rounded" style="background:#FFF9EC;border:2px solid #FFC107;">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-exclamation-triangle-fill" style="color:#cc7a00;font-size:16px;"></i>
+            <strong style="color:#7a4f00;font-size:13px;">Finance Follow-up Required</strong>
+          </div>
+          <p style="font-size:12px;color:#555;margin-bottom:10px;">
+            A payment of <strong>${{ "{:,.2f}".format(po.amount_paid or 0) }} {{ po.currency }}</strong>
+            was recorded on this PO before it was cancelled. Please document the resolution
+            before closing this off.
+          </p>
+          <form method="POST">
+            <input type="hidden" name="action" value="resolve_cancellation">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Resolution Type <span class="text-danger">*</span></label>
+              <select name="resolution_type" class="form-select form-select-sm" required>
+                <option value="">— Select resolution —</option>
+                <option value="Clawback Received">Clawback Received — Supplier returned the payment</option>
+                <option value="Credit Note">Credit Note — Supplier issued a credit note for future orders</option>
+                <option value="Offset Against Other PO">Offset Against Other PO — Applied against another order</option>
+                <option value="Written Off">Written Off — Amount written off as a loss</option>
+                <option value="Other">Other — See notes below</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Resolution Notes <span class="text-danger">*</span></label>
+              <textarea name="resolution_notes" class="form-control form-control-sm" rows="3"
+                        placeholder="Describe the resolution in detail (reference numbers, dates, amounts)..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-sm btn-warning w-100" style="font-weight:600;">
+              <i class="bi bi-check-circle me-1"></i>Mark as Resolved &amp; Close Off
+            </button>
+          </form>
+        </div>
+        {% elif po.cancellation_resolution == 'Resolved' %}
+        <div class="mt-2 p-3 rounded" style="background:#EDF7EE;border:1px solid #A3CFA8;">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-check-circle-fill" style="color:#1a7f3c;"></i>
+            <strong style="color:#1a5c2a;font-size:13px;">Cancellation Resolved</strong>
+          </div>
+          <div style="font-size:12px;color:#555;">
+            <span class="fw-600">Type:</span> {{ po.resolution_type }}<br>
+            <span class="fw-600">Notes:</span> {{ po.resolution_notes }}<br>
+            <span class="fw-600">Resolved by:</span> {{ po.resolved_by | title }} on {{ po.resolved_at | dateformat }}
+          </div>
+        </div>
+        {% endif %}
+
+      {% elif po.status == 'Fully Paid – Received' %}
+        <div class="alert alert-success py-2 text-center" style="font-size:13px;">
+          <i class="bi bi-check-circle-fill me-1"></i>PO complete. Goods received.
+        </div>
+        {% if role in ('admin','ops_exec') %}
+        <a href="{{ url_for('ledger_new') }}?ref={{ po.po_number }}&type=PO Receipt"
+           class="btn btn-outline-success w-100 btn-sm mt-2">
+          <i class="bi bi-journal-plus me-1"></i>Log in Inventory Ledger →
+        </a>
+        {% endif %}
+
+      {% else %}
+
+        {% if po.status == 'Pending Approval' and role in ('admin','ops_manager') %}
+        <div class="field-ops mb-3">
+          <p style="font-size:12px;color:#555;" class="mb-2"><span class="role-badge-ops">Ops Manager</span> &nbsp;1st approval</p>
+          <form method="POST">
+            <input type="hidden" name="action" value="approve">
+            <button type="submit" class="btn btn-warning btn-sm w-100"><i class="bi bi-check-circle me-1"></i>Approve (Ops)</button>
+          </form>
+        </div>
+        {% endif %}
+
+        {% if po.status == 'Ops Approved' and role in ('admin','finance_manager') %}
+        <div class="field-finance mb-3">
+          <p style="font-size:12px;color:#555;" class="mb-2"><span class="role-badge-finance">Finance Manager</span> &nbsp;Final approval</p>
+          <form method="POST">
+            <input type="hidden" name="action" value="approve">
+            <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-check-circle-fill me-1"></i>Approve (Finance)</button>
+          </form>
+        </div>
+        {% endif %}
+
+        {% if po.status in ('Approved','Deposit Paid','Fully Paid – Shipped','Fully Paid – Received','Partially Received') and role in ('admin','finance_exec','finance_manager') %}
+        {% set outstanding = (total_val or 0) - (po.amount_paid or 0) %}
+        <div class="field-finance mb-3">
+          <p style="font-size:12px;color:#555;" class="mb-2"><span class="role-badge-finance">Finance</span> &nbsp;Record payment</p>
+          <div class="mb-2 p-2 rounded" style="background:#F8F9FA;font-size:12px;">
+            <div class="d-flex justify-content-between"><span class="text-muted">PO Total</span><strong>${{ "{:,.2f}".format(total_val or 0) }}</strong></div>
+            <div class="d-flex justify-content-between mt-1"><span class="text-muted">Paid to date</span><span style="color:#375623;">${{ "{:,.2f}".format(po.amount_paid or 0) }}</span></div>
+            <div class="d-flex justify-content-between mt-1 pt-1" style="border-top:1px solid #dee2e6;">
+              <span class="fw-600">Outstanding</span>
+              <strong style="color:{% if outstanding > 0 %}#842029{% else %}#375623{% endif %};">${{ "{:,.2f}".format(outstanding) }}</strong>
+            </div>
+          </div>
+          {% if not has_tax_invoice %}
+          <div class="p-2 rounded mb-2" style="background:#FFF3CD;border:1px solid #FFCA2C;font-size:12px;color:#664d03;">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            <strong>Tax Invoice required.</strong> Upload a Tax Invoice document below before processing payment.
+          </div>
+          {% endif %}
+          {% if outstanding <= 0 %}
+          <div class="text-center py-2">
+            <button type="button" class="btn btn-success btn-sm w-100" disabled>
+              <i class="bi bi-check-circle-fill me-1"></i>Fully Settled
+            </button>
+            <div class="text-muted mt-1" style="font-size:11px;">No outstanding balance remaining.</div>
+          </div>
+          {% elif not has_tax_invoice %}
+          <button type="button" class="btn btn-secondary btn-sm w-100" disabled title="Upload Tax Invoice first">
+            <i class="bi bi-lock me-1"></i>Payment Locked — Tax Invoice Required
+          </button>
+          {% else %}
+          <form method="POST" onsubmit="return validateDetailPaymentSubmit({{ total_val }})">
+            <input type="hidden" name="action" value="record_payment">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;">Total Amount Paid to Date</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">$</span>
+                <input type="number" name="amount_paid" id="detailPayAmount" class="form-control form-control-sm"
+                       step="0.01" min="0" max="{{ '%.2f'|format(total_val) }}"
+                       value="{{ po.amount_paid or '' }}"
+                       placeholder="Cumulative total paid"
+                       oninput="validateDetailPayment(this, {{ total_val }})">
+              </div>
+              <div id="detailPayError" class="text-danger mt-1" style="font-size:11px;display:none;"></div>
+              <div class="form-text" style="font-size:11px;">Cumulative total paid. Max: ${{ "{:,.2f}".format(total_val) }}</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;">Payment Date</label>
+              <input type="date" name="payment_date" class="form-control form-control-sm"
+                     value="{{ today_str if today_str is defined else '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-cash-coin me-1"></i>Update Payment
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if po.status in ('Approved','Deposit Paid','Fully Paid – Shipped','Partially Received') and role in ('admin','ops_exec','ops_planner') %}
+        <div class="field-ops mb-3" id="receive-section">
+          <p style="font-size:12px;color:#555;" class="mb-2">
+            <span class="role-badge-ops">Ops</span> &nbsp;Record goods receipt
+          </p>
+          {% if po.status == 'Partially Received' %}
+          <div class="mb-2 py-2 px-3 rounded" style="background:#F3E5F5;border-left:3px solid #6A1B9A;font-size:12px;color:#4A148C;">
+            <i class="bi bi-exclamation-circle me-1"></i><strong>Partially received.</strong>
+            Enter quantities for the additional delivery below.
+          </div>
+          {% endif %}
+          <form method="POST" id="receiveForm" onsubmit="return validateReceipt()">
+            <input type="hidden" name="action" value="mark_received">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Received Date</label>
+              <input type="date" name="received_date" class="form-control form-control-sm"
+                     value="{{ today_str }}">
+            </div>
+            <div class="mb-2 rounded overflow-hidden" style="border:1px solid #dee2e6;font-size:12px;">
+              <table class="table table-sm mb-0">
+                <thead style="background:#F0F4F8;">
+                  <tr>
+                    <th style="font-size:11px;">SKU</th>
+                    <th class="text-end" style="font-size:11px;">PO Qty</th>
+                    <th class="text-end" style="font-size:11px;">Prev Rcvd</th>
+                    <th class="text-end" style="font-size:11px;color:#1F4E79;">Rcv Now</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for line in lines %}
+                  <tr id="recv-row-{{ line.line_id }}">
+                    <td>
+                      <span style="background:#DEEAF1;color:#1F4E79;border-radius:3px;padding:1px 5px;font-size:11px;font-weight:600;">{{ line.item_id }}</span>
+                      <div style="font-size:10px;color:#666;margin-top:1px;">{{ line.item_name }}</div>
+                    </td>
+                    <td class="text-end">{{ "{:,.0f}".format(line.total_qty_line) }}</td>
+                    <td class="text-end" style="color:{% if line.qty_received > 0 %}#375623{% else %}#aaa{% endif %};">
+                      {{ "{:,.0f}".format(line.qty_received) }}
+                    </td>
+                    <td class="text-end" style="width:90px;">
+                      <input type="number" name="recv_{{ line.line_id }}"
+                             id="recv_{{ line.line_id }}"
+                             class="form-control form-control-sm text-end recv-input"
+                             style="font-size:12px;padding:2px 6px;"
+                             value="{{ line.qty_remaining }}"
+                             min="0" step="1" placeholder="0"
+                             data-remaining="{{ line.qty_remaining }}"
+                             data-sku="{{ line.item_id }}"
+                             oninput="validateRecvLine(this)">
+                      <div class="recv-err text-danger" style="font-size:10px;display:none;"></div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="form-text mb-2" style="font-size:11px;">
+              Set to 0 for SKUs not yet received. Partial receipts flag the PO as
+              <span style="background:#F3E5F5;color:#6A1B9A;border-radius:3px;padding:1px 6px;font-size:10px;font-weight:700;">Partially Received</span>.
+            </div>
+            <button type="submit" class="btn btn-success btn-sm w-100" id="receiveBtn">
+              <i class="bi bi-box-seam me-1"></i>Record Receipt
+            </button>
+          </form>
+        </div>
+        {% endif %}
+
+        <!-- Close off partial PO (ops_planner / ops_manager) -->
+        {% if po.status == 'Partially Received' and role in ('admin','ops_planner','ops_manager') %}
+        <div class="mb-3" style="border:1px solid #AED6F1;border-radius:8px;padding:12px;background:#EAF4FB;">
+          <p style="font-size:12px;color:#1a5276;" class="mb-2">
+            <i class="bi bi-archive me-1"></i><strong>Close Off Partial PO</strong>
+          </p>
+          <p style="font-size:11px;color:#555;margin-bottom:10px;">
+            Use this when the remaining stock will <strong>not</strong> be received.
+            Attach a supporting document (credit note, debit note, etc.) via the
+            Documents section below before closing off.
+          </p>
+          <form method="POST">
+            <input type="hidden" name="action" value="close_partial">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">
+                Reason / Resolution <span class="text-danger">*</span>
+              </label>
+              <textarea name="close_reason" class="form-control form-control-sm" rows="3"
+                        placeholder="e.g. Supplier unable to fulfil remaining qty. Credit note CN-2026-001 issued for $XX.XX. Both parties agreed to close off."
+                        required></textarea>
+            </div>
+            <button type="submit" class="btn btn-sm w-100" style="background:#1a5276;color:#fff;font-weight:600;"
+              onclick="return confirm('Close off this PO as partial receipt? The remaining undelivered quantity will not be tracked. This cannot be undone.')">
+              <i class="bi bi-archive me-1"></i>Close Off Partial PO
+            </button>
+          </form>
+        </div>
+        {% endif %}
+
+        <!-- Resubmit / Edit (planner, when Returned) -->
+        {% if po.status == 'Returned' and role in ('admin','ops_planner') %}
+        <div class="mb-3" style="border:1px solid #FFD6A0;border-radius:8px;padding:12px;background:#FFFBF0;">
+          <p style="font-size:12px;color:#7a3800;" class="mb-2">
+            <i class="bi bi-arrow-return-left me-1"></i><strong>This PO was returned for amendment.</strong>
+          </p>
+          <p style="font-size:11px;color:#555;" class="mb-3">
+            Edit the PO to make corrections, then resubmit. Or resubmit as-is if no changes needed.
+          </p>
+          <a href="{{ url_for('po_edit', po_id=po.id) }}" class="btn btn-sm w-100 mb-2"
+             style="background:#E67E22;color:#fff;border:none;">
+            <i class="bi bi-pencil-square me-1"></i>Edit &amp; Resubmit PO
+          </a>
+          <form method="POST" class="mb-2">
+            <input type="hidden" name="action" value="resubmit">
+            <button type="submit" class="btn btn-outline-warning btn-sm w-100"
+                    onclick="return confirm('Resubmit this PO as-is without changes?')">
+              <i class="bi bi-send me-1"></i>Resubmit As-Is
+            </button>
+          </form>
+          <form method="POST">
+            <input type="hidden" name="action" value="cancel">
+            <div class="mb-2 mt-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Reason for cancellation <span class="text-muted fw-400">(optional)</span></label>
+              <textarea name="cancel_reason" class="form-control form-control-sm" rows="2" placeholder="e.g. Supplier unable to fulfil..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-outline-danger btn-sm w-100"
+              onclick="return confirm('Cancel this PO permanently? This cannot be undone.')">
+              <i class="bi bi-x-circle me-1"></i>Cancel This PO
+            </button>
+          </form>
+        </div>
+        {% endif %}
+
+        <!-- Return for Amendment (managers, during approval stages) -->
+        {% if (po.status == 'Pending Approval' and role in ('admin','ops_manager')) or (po.status == 'Ops Approved' and role in ('admin','finance_manager')) %}
+        <div class="mb-3" style="border:1px solid #F5C6CB;border-radius:8px;padding:12px;background:#FFF5F5;">
+          <p style="font-size:12px;color:#842029;" class="mb-2">
+            <i class="bi bi-arrow-return-left me-1"></i><strong>Return for Amendment</strong>
+          </p>
+          <form method="POST">
+            <input type="hidden" name="action" value="return_for_amendment">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;">Reason / Instructions for Planner</label>
+              <textarea name="reject_reason" class="form-control form-control-sm" rows="3"
+                        placeholder="Explain what needs to be corrected..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+              <i class="bi bi-arrow-return-left me-1"></i>Return to Planner
+            </button>
+          </form>
+        </div>
+        {% endif %}
+
+        <!-- Notes (all roles) -->
+        <div class="mb-3" style="border-top:1px solid #eee;padding-top:12px;margin-top:12px;">
+          <p style="font-size:12px;color:#555;" class="mb-2">
+            <span style="background:#e0e0e0;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">All Roles</span>
+            &nbsp;Update notes
+          </p>
+          <form method="POST">
+            <input type="hidden" name="action" value="update_notes">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;">Notes</label>
+              <textarea name="notes" class="form-control form-control-sm" rows="3">{{ po.notes or '' }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+              <i class="bi bi-save me-1"></i>Save Notes
+            </button>
+          </form>
+        </div>
+
+        {% if role in ('admin','ops_manager','finance_manager') and po.status not in ('Cancelled', 'Closed – Partial') %}
+        <form method="POST" class="mt-2">
+          <input type="hidden" name="action" value="cancel">
+          <div class="mb-2">
+            <label class="form-label" style="font-size:12px;font-weight:600;">Reason for cancellation <span class="text-muted fw-400">(optional)</span></label>
+            <textarea name="cancel_reason" class="form-control form-control-sm" rows="2" placeholder="e.g. Supplier unable to fulfil..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-outline-danger btn-sm w-100"
+            onclick="return confirm('Cancel this PO permanently?')">
+            <i class="bi bi-x-circle me-1"></i>Cancel PO
+          </button>
+        </form>
+        {% endif %}
+
+      {% endif %}
+
+      <!-- Role permissions legend -->
+      <div class="mt-4 p-2 rounded" style="background:#f8f9fa;font-size:11px;color:#555;">
+        <div style="font-weight:700;margin-bottom:6px;">Role Permissions</div>
+        <div><span class="role-badge-ops">Ops Planner</span>&nbsp; Raise &amp; receive POs</div>
+        <div class="mt-1"><span class="role-badge-ops">Ops Manager</span>&nbsp; 1st Approval + Cancel</div>
+        <div class="mt-1"><span class="role-badge-finance">Finance Manager</span>&nbsp; Final Approval</div>
+        <div class="mt-1"><span class="role-badge-finance">Finance Exec</span>&nbsp; Record payments</div>
+        <div class="mt-1"><span class="role-badge-ops">Ops Exec / Planner</span>&nbsp; Receive goods</div>
+      </div>
+
+    </div><!-- /form-card actions -->
+  </div><!-- /col-lg-4 -->
+</div><!-- /row -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+function validateDetailPayment(input, maxVal) {
+  var err = document.getElementById('detailPayError');
+  var val = parseFloat(input.value);
+  if (isNaN(val)) { err.style.display='none'; return; }
+  if (val < 0) {
+    err.textContent = 'Amount cannot be negative.';
+    err.style.display = 'block';
+  } else if (val > maxVal) {
+    err.textContent = 'Amount cannot exceed the PO total of $' + maxVal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '.';
+    err.style.display = 'block';
+  } else {
+    err.style.display = 'none';
+  }
+}
+function validateDetailPaymentSubmit(maxVal) {
+  var input = document.getElementById('detailPayAmount');
+  if (!input) return true;
+  var val = parseFloat(input.value);
+  if (isNaN(val) || val < 0) { alert('Please enter a valid non-negative payment amount.'); return false; }
+  if (val > maxVal) {
+    alert('Payment amount ($' + val.toFixed(2) + ') cannot exceed the PO total of $' + maxVal.toFixed(2) + '.');
+    return false;
+  }
+  return true;
+}
+
+// ── Goods receipt over-receiving validation ──────────────────────────────
+function validateRecvLine(input) {
+  var remaining = parseFloat(input.dataset.remaining);
+  var val       = parseFloat(input.value) || 0;
+  var errDiv    = input.nextElementSibling;
+  if (val < 0) {
+    input.classList.add('is-invalid');
+    errDiv.textContent = 'Cannot be negative.';
+    errDiv.style.display = 'block';
+  } else if (val > remaining) {
+    input.classList.add('is-invalid');
+    errDiv.textContent = 'Max remaining: ' + remaining;
+    errDiv.style.display = 'block';
+  } else {
+    input.classList.remove('is-invalid');
+    errDiv.style.display = 'none';
+  }
+}
+
+function validateReceipt() {
+  var inputs = document.querySelectorAll('.recv-input');
+  var hasError = false;
+  inputs.forEach(function(inp) {
+    validateRecvLine(inp);
+    if (inp.classList.contains('is-invalid')) hasError = true;
+  });
+  if (hasError) {
+    document.getElementById('receiveBtn').scrollIntoView({behavior:'smooth', block:'nearest'});
+    return false;
+  }
+  return true;
+}
+</script>
+{% endblock %}

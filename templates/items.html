@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}Items / SKUs{% endblock %}
+{% block page_title %}<i class="bi bi-boxes me-2" style="color:#2E75B6"></i>Items / SKUs{% endblock %}
+{% block topbar_actions %}
+  {% if can_manage %}
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
+    <i class="bi bi-plus-circle me-1"></i>Add Item
+  </button>
+  {% endif %}
+  {% if session.role == 'admin' %}
+  <a href="{{ url_for('master_data_import') }}" class="btn btn-sm btn-outline-primary" title="Import from Excel">
+    <i class="bi bi-cloud-upload me-1"></i>Import
+  </a>
+  {% endif %}
+  <a href="{{ url_for('export_items') }}" class="btn btn-sm btn-outline-secondary" title="Export to CSV"><i class="bi bi-download me-1"></i>CSV</a>
+{% endblock %}
+
+{% block content %}
+<div class="ims-table">
+  <div class="p-3 d-flex justify-content-between align-items-center" style="background:#fff;border-bottom:1px solid #eee;">
+    <span style="font-weight:700;color:#1F4E79;font-size:14px;">
+      {{ items | length }} Item{% if items|length != 1 %}s{% endif %}
+    </span>
+    <span class="text-muted" style="font-size:12px;">
+      Active: {{ items | selectattr("status","eq","Active") | list | length }}
+      &nbsp;|&nbsp;
+      Inactive: {{ items | selectattr("status","ne","Active") | list | length }}
+    </span>
+  </div>
+  <table class="table table-hover mb-0 sortable">
+    <thead>
+      <tr>
+        <th>Item ID</th><th>Name</th><th>Category</th><th>UOM</th><th>Unit Price</th>
+        <th>Reorder Pt.</th><th>Lead Days</th><th>Pref. Supplier</th>
+        <th>Status</th>
+        {% if can_manage %}<th>Actions</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="fw-600" style="color:#2E75B6;{% if can_manage %}cursor:pointer;text-decoration:underline dotted;{% endif %}"
+          {% if can_manage %}
+          data-bs-toggle="modal" data-bs-target="#editItemModal"
+          data-id="{{ item.item_id }}"
+          data-name="{{ item.name }}"
+          data-description="{{ item.description or '' }}"
+          data-category="{{ item.category or '' }}"
+          data-uom="{{ item.unit_of_measure }}"
+          data-reorder="{{ item.reorder_point }}"
+          data-lead="{{ item.lead_days }}"
+          data-supplier="{{ item.preferred_supplier or '' }}"
+          data-price="{{ item.unit_price or 0 }}"
+          data-notes="{{ item.notes or '' }}"
+          title="Click to edit"
+          {% endif %}>{{ item.item_id }}</td>
+        <td class="fw-600">{{ item.name }}</td>
+        <td>
+          {% if item.category %}
+          <span class="badge-status s-approved">{{ item.category }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ item.unit_of_measure }}</td>
+        <td>{{ item.unit_price | currency }}</td>
+        <td>{{ item.reorder_point }}</td>
+        <td>{{ item.lead_days }}</td>
+        <td>
+          {% if item.preferred_supplier %}
+          <a href="{{ url_for('supplier_detail', supplier_id=item.preferred_supplier) }}"
+             style="color:#2E75B6;text-decoration:none;">
+            {{ item.preferred_supplier }}{% if item.supplier_name %} — {{ item.supplier_name }}{% endif %}
+          </a>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if item.status == "Active" %}
+          <span class="badge-status s-received"><i class="bi bi-check-circle me-1"></i>Active</span>
+          {% else %}
+          <span class="badge-status s-cancelled"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+          {% endif %}
+        </td>
+        {% if can_manage %}
+        <td>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2 me-1"
+            data-bs-toggle="modal" data-bs-target="#editItemModal"
+            data-id="{{ item.item_id }}"
+            data-name="{{ item.name }}"
+            data-description="{{ item.description or '' }}"
+            data-category="{{ item.category or '' }}"
+            data-uom="{{ item.unit_of_measure }}"
+            data-reorder="{{ item.reorder_point }}"
+            data-lead="{{ item.lead_days }}"
+            data-supplier="{{ item.preferred_supplier or '' }}"
+            data-price="{{ item.unit_price or 0 }}"
+            data-notes="{{ item.notes or '' }}">
+            <i class="bi bi-pencil"></i> Edit
+          </button>
+          <form method="POST" action="{{ url_for('item_toggle', item_id=item.item_id) }}" class="d-inline">
+            {% if item.status == "Active" %}
+            <button type="submit" class="btn btn-sm btn-outline-warning py-0 px-2"
+              onclick="return confirm('Deactivate ' + '{{ item.name }}' + '?')">
+              <i class="bi bi-pause-circle"></i> Deactivate
+            </button>
+            {% else %}
+            <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2"
+              onclick="return confirm('Activate ' + '{{ item.name }}' + '?')">
+              <i class="bi bi-play-circle"></i> Activate
+            </button>
+            {% endif %}
+          </form>
+          <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1"
+            data-bs-toggle="modal" data-bs-target="#deleteItemModal"
+            data-id="{{ item.item_id }}" data-name="{{ item.name }}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      {% if not items %}
+      <tr><td colspan="9" class="text-center text-muted py-4">No items yet. Click <strong>Add Item</strong> to create your first SKU.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+{% if can_manage %}
+<!-- ADD ITEM MODAL -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('item_add') }}">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white"><i class="bi bi-plus-circle me-2"></i>Add New Item / SKU</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-600">Item ID <span class="text-danger">*</span></label>
+              <input type="text" name="item_id" id="add_item_id" class="form-control" required
+                placeholder="e.g. I006" style="text-transform:uppercase;">
+              <small class="text-muted">Must be unique</small>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-600">Item Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required placeholder="e.g. Widget A">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Unit of Measure</label>
+              <select name="unit_of_measure" class="form-select">
+                {% for u in ["Units","Pcs","Kg","g","L","mL","Box","Carton","Pallet","Set","Pair","Roll","Sheet"] %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Default Unit Price</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="unit_price" class="form-control" step="0.0001" min="0" value="0">
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-600">Description</label>
+              <input type="text" name="description" class="form-control" placeholder="Short description">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Category</label>
+              <input type="text" name="category" class="form-control"
+                list="cat_opts_add" placeholder="e.g. Electronics">
+              <datalist id="cat_opts_add">
+                {% for cat in categories %}
+                <option value="{{ cat }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Reorder Point</label>
+              <input type="number" name="reorder_point" class="form-control" value="0" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Lead Days</label>
+              <input type="number" name="lead_days" class="form-control" value="14" min="0">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-600">Preferred Supplier</label>
+              <select name="preferred_supplier" class="form-select">
+                <option value="">— none —</option>
+                {% for s in suppliers %}
+                <option value="{{ s.supplier_id }}">{{ s.supplier_id }} — {{ s.name }}</option>
+                {% endfor %}
+              </select>
+              <small class="text-muted">Will also auto-link this item to that supplier</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-600">Notes</label>
+              <input type="text" name="notes" class="form-control" placeholder="Optional notes">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Add Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ITEM MODAL -->
+<div class="modal fade" id="editItemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" id="editItemForm">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white"><i class="bi bi-pencil me-2"></i>Edit Item — <span id="edit_item_title"></span></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-600">Item ID</label>
+              <input type="text" id="edit_item_id_display" class="form-control" disabled>
+              <small class="text-muted">Item ID cannot be changed</small>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-600">Item Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="edit_name" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Default Unit Price</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="unit_price" id="edit_price" class="form-control" step="0.0001" min="0">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Unit of Measure</label>
+              <select name="unit_of_measure" id="edit_uom" class="form-select">
+                {% for u in ["Units","Pcs","Kg","g","L","mL","Box","Carton","Pallet","Set","Pair","Roll","Sheet"] %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-600">Description</label>
+              <input type="text" name="description" id="edit_desc" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Category</label>
+              <input type="text" name="category" id="edit_category" class="form-control"
+                list="cat_opts_edit">
+              <datalist id="cat_opts_edit">
+                {% for cat in categories %}
+                <option value="{{ cat }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Reorder Point</label>
+              <input type="number" name="reorder_point" id="edit_reorder" class="form-control" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Lead Days</label>
+              <input type="number" name="lead_days" id="edit_lead" class="form-control" min="0">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-600">Preferred Supplier</label>
+              <select name="preferred_supplier" id="edit_supplier" class="form-select">
+                <option value="">— none —</option>
+                {% for s in suppliers %}
+                <option value="{{ s.supplier_id }}">{{ s.supplier_id }} — {{ s.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-600">Notes</label>
+              <input type="text" name="notes" id="edit_notes" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE ITEM MODAL -->
+<div class="modal fade" id="deleteItemModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" id="deleteItemForm">
+        <div class="modal-header" style="background:#dc3545;">
+          <h5 class="modal-title text-white"><i class="bi bi-trash me-2"></i>Delete Item</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center py-4">
+          <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:2rem;"></i>
+          <p class="mt-3 mb-1">Delete item</p>
+          <p class="fw-bold" id="delete_item_label"></p>
+          <p class="text-muted" style="font-size:12px;">Items with existing POs or ledger entries cannot be deleted — deactivate instead.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const editItemModal = document.getElementById("editItemModal")
+if (editItemModal) {
+  editItemModal.addEventListener("show.bs.modal", function(e) {
+    const btn = e.relatedTarget
+    document.getElementById("edit_item_title").textContent = btn.dataset.id + " — " + btn.dataset.name
+    document.getElementById("editItemForm").action = "/items/" + btn.dataset.id + "/edit"
+    document.getElementById("edit_item_id_display").value = btn.dataset.id
+    document.getElementById("edit_name").value     = btn.dataset.name
+    document.getElementById("edit_price").value    = btn.dataset.price
+    document.getElementById("edit_desc").value     = btn.dataset.description
+    document.getElementById("edit_category").value = btn.dataset.category
+    document.getElementById("edit_uom").value      = btn.dataset.uom
+    document.getElementById("edit_reorder").value  = btn.dataset.reorder
+    document.getElementById("edit_lead").value     = btn.dataset.lead
+    document.getElementById("edit_supplier").value = btn.dataset.supplier
+    document.getElementById("edit_notes").value    = btn.dataset.notes
+  })
+}
+const deleteItemModal = document.getElementById("deleteItemModal")
+if (deleteItemModal) {
+  deleteItemModal.addEventListener("show.bs.modal", function(e) {
+    const btn = e.relatedTarget
+    document.getElementById("delete_item_label").textContent = btn.dataset.id + " — " + btn.dataset.name
+    document.getElementById("deleteItemForm").action = "/items/" + btn.dataset.id + "/delete"
+  })
+}
+</script>
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Import Master Data{% endblock %}
+{% block page_title %}<i class="bi bi-cloud-upload me-2" style="color:#2E75B6"></i>Import Master Data{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('item_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Items</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    {% if result %}
+    <!-- ── Import Results ───────────────────────────────────────────────── -->
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-check2-circle me-2" style="color:#1a7f3c"></i>Import Complete</div>
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#1F4E79">{{ result.items_created }}</div>
+            <div style="font-size:12px;color:#555;">Items created / updated</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#888">{{ result.items_skipped }}</div>
+            <div style="font-size:12px;color:#555;">Item rows skipped</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#1F4E79">{{ result.bundles_created }}</div>
+            <div style="font-size:12px;color:#555;">Bundles created</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#888">{{ result.bundles_skipped }}</div>
+            <div style="font-size:12px;color:#555;">Bundle rows skipped</div>
+          </div>
+        </div>
+      </div>
+
+      {% if result.errors %}
+      <div class="alert alert-warning mb-3" style="font-size:13px;">
+        <div class="fw-bold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Warnings / Errors during import:</div>
+        <ul class="mb-0 ps-3">
+          {% for e in result.errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('item_list') }}" class="btn btn-primary"><i class="bi bi-boxes me-1"></i>View Items</a>
+        <a href="{{ url_for('bundle_list') }}" class="btn btn-outline-primary"><i class="bi bi-collection me-1"></i>View Bundles</a>
+        <a href="{{ url_for('master_data_import') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat me-1"></i>Import Another File</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Upload Form ──────────────────────────────────────────────────── -->
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Upload SKU Cost Price Listings</div>
+      <p style="font-size:13px;color:#555;margin-bottom:16px;">
+        Upload the <strong>SG Finance SKU Cost Price Listings &amp; Valuation</strong> Excel file.
+        The system will read all three tabs and populate Items/SKUs and Bundles automatically.
+        Existing items will be updated; new items will be created.
+      </p>
+
+      <form method="POST" enctype="multipart/form-data">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-600">Excel File <span class="text-danger">*</span></label>
+            <input type="file" name="master_file" class="form-control" accept=".xlsx,.xls" required>
+            <small class="text-muted">Accepts .xlsx or .xls only. Must contain tabs: <code>AS</code>, <code>OVA</code>, <code>&amp;Sons (Update)</code>.</small>
+          </div>
+          <div class="col-12 d-flex gap-2 align-items-center">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-cloud-upload me-1"></i>Import File
+            </button>
+            <a href="{{ url_for('item_list') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- ── Tab Reference ───────────────────────────────────────────────── -->
+    <div class="form-card mt-3">
+      <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>What Gets Imported</div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead>
+          <tr style="background:#f0f4f8;">
+            <th>Tab</th><th>Brand</th><th>SKU ID Column</th><th>Cost Column</th><th>Skip Condition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="fw-600">AS</td>
+            <td><span style="background:#dbeafe;color:#1e40af;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;">andSons</span></td>
+            <td>Column B</td>
+            <td>Column E (Finance COGS ex-GST)</td>
+            <td>Remark = "DISCON" or blank SKU</td>
+          </tr>
+          <tr>
+            <td class="fw-600">OVA</td>
+            <td><span style="background:#fce7f3;color:#9d174d;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;">Ova</span></td>
+            <td>Column B</td>
+            <td>Column E (Finance COGS ex-GST)</td>
+            <td>Remark = "DISCON" or blank SKU</td>
+          </tr>
+          <tr>
+            <td class="fw-600">&amp;Sons (Update)</td>
+            <td><span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;">Bundles</span></td>
+            <td>Column A (Bundle ID)</td>
+            <td>Components at cols J, L, N, P, R</td>
+            <td>No component SKUs in cols J–R</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ── Danger Zone ─────────────────────────────────────────────────── -->
+    <div class="form-card mt-3" style="border:1px solid #f5c6cb;">
+      <div class="form-section-title" style="color:#721c24;"><i class="bi bi-exclamation-triangle me-2"></i>Danger Zone</div>
+      <p style="font-size:13px;color:#555;margin-bottom:12px;">
+        Use this only to reset master data before going live. This will permanently delete
+        <strong>all items, bundles, bundle components, and supplier-item links</strong>.
+        This action is blocked if any POs or inventory ledger entries exist.
+      </p>
+      <form method="POST" action="{{ url_for('items_clear') }}"
+            onsubmit="return confirm('This will DELETE ALL items and bundles. Are you absolutely sure?');">
+        <button type="submit" class="btn btn-sm btn-danger">
+          <i class="bi bi-trash me-1"></i>Clear All Items &amp; Bundles
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

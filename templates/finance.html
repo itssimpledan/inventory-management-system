@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Finance — Month-End  {% if pending_resolution %}
+  <div class="form-card mt-3" style="border:2px solid #FFC107;">
+    <div class="p-3" style="background:#FFF9EC;border-bottom:1px solid #FFE082;">
+      <span style="font-weight:700;color:#7a4f00;font-size:13px;">
+        <i class="bi bi-exclamation-triangle-fill me-1" style="color:#cc7a00;"></i>
+        5. Cancelled POs — Finance Follow-up Required
+        <span class="text-muted fw-400" style="font-size:11px;">Payment made but not yet resolved</span>
+      </span>
+      <span class="ms-3" style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;">
+        {{ pending_resolution | length }}
+      </span>
+    </div>
+    <table class="table table-hover mb-0" style="font-size:13px;">
+      <thead>
+        <tr>
+          <th>PO Number</th>
+          <th>Cancelled On</th>
+          <th>Cancelled By</th>
+          <th>Supplier</th>
+          <th>Cancel Reason</th>
+          <th class="text-end">Amount Paid</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pr in pending_resolution %}
+        <tr style="background:#FFFEF5;">
+          <td class="fw-600">
+            <a href="{{ url_for('po_detail', po_id=pr.id) }}" style="color:#2E75B6;text-decoration:none;">{{ pr.po_number }}</a>
+          </td>
+          <td>{{ pr.cancelled_at | dateformat }}</td>
+          <td>{{ pr.cancelled_by | title if pr.cancelled_by else '—' }}</td>
+          <td>{{ pr.supplier_name }}</td>
+          <td style="font-size:12px;color:#666;">{{ pr.cancel_reason or '—' }}</td>
+          <td class="text-end fw-700" style="color:#842029;">
+            ${{ "{:,.2f}".format(pr.amount_paid or 0) }} <small class="text-muted">{{ pr.currency or 'SGD' }}</small>
+          </td>
+          <td>
+            <a href="{{ url_for('po_detail', po_id=pr.id) }}"
+               class="btn btn-sm btn-warning py-0 px-2" style="font-size:11px;font-weight:600;">
+              <i class="bi bi-pencil me-1"></i>Resolve
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#FFF9EC;font-weight:700;">
+          <td colspan="5" class="text-end" style="color:#7a4f00;">Total unresolved:</td>
+          <td class="text-end" style="color:#842029;">${{ "{:,.2f}".format(pending_resolution | sum(attribute='amount_paid')) }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+{% endblock %}
+{% block page_title %}<i class="bi bi-journal-bookmark me-2" style="color:#28a745"></i>Finance — Month-End Postings{% endblock %}
+
+{% block topbar_actions %}
+<form class="d-flex align-items-center gap-2" method="GET">
+  <label class="text-muted" style="font-size:12px;white-space:nowrap;">Period:</label>
+  <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm" style="width:140px;">
+  <span class="text-muted">—</span>
+  <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm" style="width:140px;">
+  <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Apply</button>
+  <a href="{{ url_for('export_ap_summary', date_from=date_from, date_to=date_to) }}"
+     class="btn btn-sm btn-outline-secondary" title="Export AP Summary to CSV">
+    <i class="bi bi-download me-1"></i>CSV
+  </a>
+</form>
+{% endblock %}
+
+{% block content %}
+<!-- ── PAYMENT ACTION DASHBOARD ──────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- Overdue -->
+  <div class="col-md-4">
+    <div class="form-card h-100" style="border-left:4px solid #dc3545;">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#842029;">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>Overdue Payments
+        </div>
+        <span style="font-size:22px;font-weight:800;color:#dc3545;">{{ pay_overdue|length }}</span>
+      </div>
+      {% set ov_total = namespace(v=0) %}
+      {% for r in pay_overdue %}{% set ov_total.v = ov_total.v + ((r.total_val or 0)-(r.amount_paid or 0)) %}{% endfor %}
+      <div style="font-size:18px;font-weight:700;color:#842029;">${{ "{:,.2f}".format(ov_total.v) }}</div>
+      <div class="text-muted" style="font-size:11px;">Total outstanding past due date</div>
+    </div>
+  </div>
+  <!-- Due soon -->
+  <div class="col-md-4">
+    <div class="form-card h-100" style="border-left:4px solid #FFC000;">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#856404;">
+          <i class="bi bi-clock-fill me-1"></i>Due Within 30 Days
+        </div>
+        <span style="font-size:22px;font-weight:800;color:#856404;">{{ pay_due_soon|length }}</span>
+      </div>
+      {% set ds_total = namespace(v=0) %}
+      {% for r in pay_due_soon %}{% set ds_total.v = ds_total.v + ((r.total_val or 0)-(r.amount_paid or 0)) %}{% endfor %}
+      <div style="font-size:18px;font-weight:700;color:#856404;">${{ "{:,.2f}".format(ds_total.v) }}</div>
+      <div class="text-muted" style="font-size:11px;">Outstanding due in next 30 days</div>
+    </div>
+  </div>
+  <!-- No due date -->
+  <div class="col-md-4">
+    <div class="form-card h-100" style="border-left:4px solid #aaa;">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#555;">
+          <i class="bi bi-question-circle me-1"></i>No Due Date Set
+        </div>
+        <span style="font-size:22px;font-weight:800;color:#888;">{{ pay_no_date|length }}</span>
+      </div>
+      {% set nd_total = namespace(v=0) %}
+      {% for r in pay_no_date %}{% set nd_total.v = nd_total.v + ((r.total_val or 0)-(r.amount_paid or 0)) %}{% endfor %}
+      <div style="font-size:18px;font-weight:700;color:#555;">${{ "{:,.2f}".format(nd_total.v) }}</div>
+      <div class="text-muted" style="font-size:11px;">Approved POs with no payment date</div>
+    </div>
+  </div>
+</div>
+
+{% if pay_overdue %}
+<div class="form-card mb-4">
+  <div class="form-section-title" style="color:#842029;"><i class="bi bi-exclamation-triangle-fill me-2"></i>Overdue — Action Required</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:13px;">
+      <thead><tr style="background:#FFF5F5;">
+        <th>PO Number</th><th>Supplier</th><th>Due Date</th>
+        <th class="text-end">PO Value</th><th class="text-end">Paid</th>
+        <th class="text-end">Outstanding</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for r in pay_overdue %}
+        {% set owed = (r.total_val or 0) - (r.amount_paid or 0) %}
+        <tr style="background:#FFF5F5;">
+          <td><a href="{{ url_for('po_detail', po_id=r.id) }}" class="fw-600" style="color:#1F4E79;">{{ r.po_number }}</a></td>
+          <td>{{ r.supplier_name }}</td>
+          <td style="color:#dc3545;font-weight:700;">{{ r.payment_due_date | dateformat }}</td>
+          <td class="text-end">${{ "{:,.2f}".format(r.total_val or 0) }}</td>
+          <td class="text-end" style="color:#375623;">${{ "{:,.2f}".format(r.amount_paid or 0) }}</td>
+          <td class="text-end fw-700" style="color:#842029;">${{ "{:,.2f}".format(owed) }}</td>
+          <td><a href="{{ url_for('po_detail', po_id=r.id) }}" class="btn btn-sm btn-outline-danger py-0 px-2">Pay Now &#x2192;</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── KPI SUMMARY ROW ────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="kpi-icon" style="background:#E2EFDA;">
+          <i class="bi bi-box-seam" style="color:#375623;"></i>
+        </div>
+        <div>
+          <div class="kpi-value" style="font-size:18px;">{{ total_received_value | currency }}</div>
+          <div class="kpi-label">Inventory Received</div>
+          <div style="font-size:10px;color:#888;">Dr Inventory / Cr AP</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="kpi-icon" style="background:#D1ECF1;">
+          <i class="bi bi-bank" style="color:#0C5460;"></i>
+        </div>
+        <div>
+          <div class="kpi-value" style="font-size:18px;">{{ total_payments | currency }}</div>
+          <div class="kpi-label">Payments Made</div>
+          <div style="font-size:10px;color:#888;">Dr AP / Cr Bank</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="kpi-icon" style="background:#FFF3CD;">
+          <i class="bi bi-graph-down" style="color:#856404;"></i>
+        </div>
+        <div>
+          <div class="kpi-value" style="font-size:18px;">{{ total_cogs | currency }}</div>
+          <div class="kpi-label">COGS / Consumed</div>
+          <div style="font-size:10px;color:#888;">Dr COGS / Cr Inventory</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="kpi-icon" style="background:#F8D7DA;">
+          <i class="bi bi-hourglass-split" style="color:#721C24;"></i>
+        </div>
+        <div>
+          <div class="kpi-value" style="font-size:18px;">{{ total_ap | currency }}</div>
+          <div class="kpi-label">Outstanding AP</div>
+          <div style="font-size:10px;color:#888;">Approved POs — unpaid</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SECTION 1: GOODS RECEIVED ─────────────────────────────────────────── -->
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3" style="background:#E2EFDA;border-bottom:1px solid #A9D18E;">
+      <span style="font-weight:700;color:#375623;font-size:13px;">
+        <i class="bi bi-box-seam me-1"></i>
+        1. Goods Received &nbsp;
+        <span class="text-muted fw-400" style="font-size:11px;">Dr Inventory &nbsp;/&nbsp; Cr Accounts Payable</span>
+      </span>
+      <span class="ms-3 badge-status s-received" style="font-size:11px;">{{ goods_received | length }} entries</span>
+    </div>
+    {% if goods_received %}
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>PO Number</th><th>Received Date</th><th>Supplier</th><th>Item</th>
+          <th class="text-end">Qty Received</th><th class="text-end">Unit Cost</th>
+          <th class="text-end">Freight</th><th class="text-end">Other</th>
+          <th class="text-end">Total Value (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in goods_received %}
+        <tr>
+          <td class="fw-600">
+            <a href="{{ url_for('po_list') }}?status=Fully+Paid+%E2%80%93+Received"
+               style="color:#2E75B6;text-decoration:none;">{{ r.po_number }}</a>
+          </td>
+          <td>{{ r.received_date | dateformat }}</td>
+          <td>{{ r.supplier_name }}</td>
+          <td>{{ r.item_name }}</td>
+          <td class="text-end">{{ r.received_qty | qty }}</td>
+          <td class="text-end">{{ r.unit_price | currency }}</td>
+          <td class="text-end">{{ r.freight_costs | currency }}</td>
+          <td class="text-end">{{ r.other_costs | currency }}</td>
+          <td class="text-end fw-700" style="color:#375623;">{{ r.inventory_value | currency }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#E2EFDA;font-weight:700;">
+          <td colspan="8" class="text-end">Total to post:</td>
+          <td class="text-end" style="color:#375623;">{{ total_received_value | currency }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 text-center text-muted" style="font-size:13px;">No goods received in this period.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── SECTION 2: PAYMENTS ───────────────────────────────────────────────── -->
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3" style="background:#D1ECF1;border-bottom:1px solid #9DCFDE;">
+      <span style="font-weight:700;color:#0C5460;font-size:13px;">
+        <i class="bi bi-bank me-1"></i>
+        2. Payments Made &nbsp;
+        <span class="text-muted fw-400" style="font-size:11px;">Dr Accounts Payable &nbsp;/&nbsp; Cr Bank</span>
+      </span>
+      <span class="ms-3 badge-status s-approved" style="font-size:11px;">{{ payments | length }} entries</span>
+    </div>
+    {% if payments %}
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>PO Number</th><th>Payment Date</th><th>Type</th><th>Supplier</th>
+          <th class="text-end">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        {% set is_cancelled_po = p.po_number in (pending_resolution | map(attribute='po_number') | list) or
+                                  (pending_resolution | selectattr('po_number','eq',p.po_number) | list | length > 0) %}
+        <tr style="{% if is_cancelled_po %}background:#FFF5F5;{% endif %}">
+          <td class="fw-600">
+            {% set po_row = pending_resolution | selectattr('po_number','eq',p.po_number) | first | default(none) %}
+            {% if po_row %}
+            <a href="{{ url_for('po_detail', po_id=po_row.id) }}" style="color:#842029;text-decoration:none;">{{ p.po_number }}</a>
+            <span style="background:#F8D7DA;color:#842029;border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700;margin-left:4px;">Cancelled</span>
+            {% else %}
+            <span style="color:#2E75B6;">{{ p.po_number }}</span>
+            {% endif %}
+          </td>
+          <td>{{ p.pay_date | dateformat }}</td>
+          <td>
+            {% if p.pay_type == 'Deposit' %}
+              <span class="badge-status s-deposit">Deposit</span>
+            {% elif p.pay_type == 'Full Payment (combined)' %}
+              <span class="badge-status s-received">Full Payment</span>
+              <span title="Deposit split not available for this record" style="cursor:help;font-size:10px;color:#888;margin-left:3px;">&#9432;</span>
+            {% else %}
+              <span class="badge-status s-received">{{ p.pay_type }}</span>
+            {% endif %}
+          </td>
+          <td>{{ p.supplier_name }}</td>
+          <td class="text-end fw-700" style="color:{% if is_cancelled_po %}#842029{% else %}#0C5460{% endif %};">{{ p.amount | currency }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#D1ECF1;font-weight:700;">
+          <td colspan="4" class="text-end">Total to post:</td>
+          <td class="text-end" style="color:#0C5460;">{{ total_payments | currency }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 text-center text-muted" style="font-size:13px;">No payments recorded in this period.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── SECTION 3: INVENTORY MOVEMENTS / COGS ────────────────────────────── -->
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3" style="background:#FFF3CD;border-bottom:1px solid #FFD700;">
+      <span style="font-weight:700;color:#856404;font-size:13px;">
+        <i class="bi bi-arrow-left-right me-1"></i>
+        3. Inventory Movements &nbsp;
+        <span class="text-muted fw-400" style="font-size:11px;">Receipts: Dr Inventory / Cr AP &nbsp;|&nbsp; Issues: Dr COGS / Cr Inventory</span>
+      </span>
+      <span class="ms-3 badge-status s-pending" style="font-size:11px;">{{ movements | length }} entries</span>
+    </div>
+    {% if movements %}
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>Txn ID</th><th>Date</th><th>Type</th><th>Reference</th><th>Item</th>
+          <th class="text-end">Qty In</th><th class="text-end">Qty Out</th>
+          <th class="text-end">Unit Cost</th>
+          <th class="text-end">Value In</th><th class="text-end">Value Out</th>
+          <th>Posted By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in movements %}
+        <tr>
+          <td class="fw-600" style="font-size:12px;color:#856404;">{{ m.txn_id }}</td>
+          <td>{{ m.txn_date | dateformat }}</td>
+          <td>
+            <span class="badge-status
+              {% if m.txn_type == 'PO Receipt' %}s-received
+              {% elif m.txn_type in ('Sale',) %}s-approved
+              {% elif m.txn_type in ('Shrinkage','Write-off') %}s-cancelled
+              {% elif 'Adjustment' in m.txn_type %}s-pending
+              {% else %}s-draft{% endif %}"
+              style="font-size:10px;">{{ m.txn_type }}</span>
+          </td>
+          <td style="font-size:12px;color:#555;">{{ m.reference or '—' }}</td>
+          <td>{{ m.item_name }}</td>
+          <td class="text-end">{% if m.qty_in %}{{ m.qty_in | qty }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if m.qty_out %}{{ m.qty_out | qty }}{% else %}—{% endif %}</td>
+          <td class="text-end">{{ m.unit_cost | currency }}</td>
+          <td class="text-end" style="color:#375623;">
+            {% if m.value_in %}{{ m.value_in | currency }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end" style="color:#dc3545;">
+            {% if m.value_out %}{{ m.value_out | currency }}{% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px;color:#555;">{{ m.posted_by }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#FFF3CD;font-weight:700;">
+          <td colspan="8" class="text-end">COGS / Issues total:</td>
+          <td class="text-end">—</td>
+          <td class="text-end" style="color:#dc3545;">{{ total_cogs | currency }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 text-center text-muted" style="font-size:13px;">No inventory movements in this period.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── SECTION 4: OUTSTANDING AP ─────────────────────────────────────────── -->
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3" style="background:#F8D7DA;border-bottom:1px solid #F5C6CB;">
+      <span style="font-weight:700;color:#721C24;font-size:13px;">
+        <i class="bi bi-hourglass-split me-1"></i>
+        4. Outstanding Accounts Payable &nbsp;
+        <span class="text-muted fw-400" style="font-size:11px;">Approved POs not yet fully paid</span>
+      </span>
+      <span class="ms-3 badge-status s-cancelled" style="font-size:11px;">{{ outstanding_ap | length }} POs</span>
+    </div>
+    {% if outstanding_ap %}
+    <table class="table table-hover mb-0 sortable" style="font-size:13px;">
+      <thead>
+        <tr>
+          <th>PO Number</th>
+          <th>PO Date</th>
+          <th>Supplier</th>
+          <th>Status</th>
+          <th>Payment Due</th>
+          <th class="text-end">PO Total</th>
+          <th class="text-end">Paid to Date</th>
+          <th class="text-end">Payment Remaining</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ap in outstanding_ap %}
+        {% set remaining = (ap.total_value or 0) - (ap.amount_paid or 0) %}
+        {% set is_overdue = ap.payment_due_date and ap.payment_due_date < today %}
+        <tr {% if is_overdue %}style="background:#FFF5F5;"{% endif %}>
+          <td class="fw-600">
+            <a href="{{ url_for('po_detail', po_id=ap.id) }}"
+               style="color:#2E75B6;text-decoration:none;">{{ ap.po_number }}</a>
+          </td>
+          <td>{{ ap.po_date | dateformat }}</td>
+          <td>{{ ap.supplier_name }}</td>
+          <td>
+            <span class="badge-status
+              {% if ap.status == 'Approved' %}s-approved
+              {% elif ap.status == 'Deposit Paid' %}s-deposit
+              {% elif ap.status == 'Partially Received' %}s-partial
+              {% else %}s-shipped{% endif %}"
+              style="font-size:10px;">{{ ap.status }}</span>
+          </td>
+          <td style="white-space:nowrap;">
+            {% if ap.payment_due_date %}
+              <span style="{% if is_overdue %}color:#842029;font-weight:700;{% endif %}">
+                {{ ap.payment_due_date | dateformat }}
+                {% if is_overdue %}<i class="bi bi-exclamation-triangle-fill ms-1" style="color:#dc3545;"></i>{% endif %}
+              </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end fw-700">{{ ap.total_value | currency }} <small class="text-muted">{{ ap.currency or 'SGD' }}</small></td>
+          <td class="text-end" style="color:{% if (ap.amount_paid or 0) > 0 %}#375623{% else %}#aaa{% endif %};">
+            {{ ap.amount_paid | currency }}
+          </td>
+          <td class="text-end fw-700" style="color:{% if remaining <= 0 %}#375623{% elif is_overdue %}#842029{% else %}#721C24{% endif %};">
+            {% if remaining <= 0 %}
+              <span style="background:#E2EFDA;color:#375623;border-radius:4px;padding:2px 8px;font-size:11px;">Settled</span>
+            {% else %}
+              {{ remaining | currency }}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#F8D7DA;font-weight:700;">
+          <td colspan="7" class="text-end" style="color:#721C24;">Total outstanding AP:</td>
+          <td class="text-end" style="color:#721C24;">
+            {% set total_remaining = namespace(v=0) %}
+            {% for ap in outstanding_ap %}{% set total_remaining.v = total_remaining.v + [((ap.total_value or 0)-(ap.amount_paid or 0)),0]|max %}{% endfor %}
+            {{ total_remaining.v | currency }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 text-center text-muted" style="font-size:13px;">No outstanding AP — all approved POs are fully paid.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

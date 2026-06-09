@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Upload Stockcount{% endblock %}
+{% block page_title %}<i class="bi bi-upload me-2" style="color:#375623"></i>Upload Stockcount{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('mec_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Upload Physical Stockcount</div>
+      <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label fw-600">Period <span class="text-danger">*</span></label>
+          <select name="period" class="form-select" required>
+            <option value="">Select period…</option>
+            {% for m in months %}
+            <option value="{{ m }}" {% if m == current_period %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Select the month this stockcount was performed.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-600">Stockcount CSV <span class="text-danger">*</span></label>
+          <input type="file" name="csv_file" class="form-control" accept=".csv,.xlsx,.xls" required>
+          <div class="form-text">CSV with columns: <strong>SKU / Item ID</strong> and <strong>Physical Qty</strong>. One row per SKU.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-600">Notes</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Optional — e.g. 'End of May stockcount, warehouse A only'"></textarea>
+        </div>
+        <button type="submit" class="btn btn-success w-100">
+          <i class="bi bi-upload me-1"></i>Upload & Calculate Variance
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>File Format</div>
+      <p style="font-size:13px;">The CSV must have at minimum two columns:</p>
+      <table class="table table-sm" style="font-size:12px;">
+        <thead><tr><th>Column</th><th>Accepted header names</th></tr></thead>
+        <tbody>
+          <tr><td><strong>SKU / Item ID</strong></td><td>sku, item_id, item, product</td></tr>
+          <tr><td><strong>Physical Qty</strong></td><td>qty, quantity, physical, count, balance, stock</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert-warning py-2 mt-2" style="font-size:12px;">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        Only one approved stockcount per period is allowed. Uploading a new one will replace a pending upload.
+      </div>
+      <div class="alert alert-info py-2 mt-2" style="font-size:12px;">
+        <i class="bi bi-lightbulb me-1"></i>
+        The system will calculate the <strong>book balance</strong> (opening + receipts + adjustments) and show you the variance against your physical count.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

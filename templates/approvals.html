@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block page_title %}
+  <i class="bi bi-check2-all me-2" style="color:#2E75B6"></i>Approvals
+  {% if total_pending %}
+  <span class="ms-2" style="background:#dc3545;color:#fff;border-radius:12px;padding:2px 10px;font-size:13px;font-weight:700;">
+    {{ total_pending }}
+  </span>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if total_pending == 0 %}
+<div class="form-card text-center py-5">
+  <i class="bi bi-check-circle-fill" style="font-size:3rem;color:#28a745;"></i>
+  <h5 class="mt-3" style="color:#375623;">All clear — nothing awaiting your approval</h5>
+  <p class="text-muted">Check back later or browse the sections below.</p>
+</div>
+{% endif %}
+
+<!-- ── POs AWAITING OPS APPROVAL ─────────────────────────────────────────── -->
+{% if pos_pending_ops %}
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3 d-flex justify-content-between align-items-center"
+         style="background:#EBF3FB;border-bottom:1px solid #BDD7EE;">
+      <span style="font-weight:700;color:#1F4E79;font-size:13px;">
+        <i class="bi bi-file-earmark-text me-1"></i>
+        Purchase Orders — Awaiting Ops Approval
+        <span class="ms-2 badge-status s-pending">{{ pos_pending_ops | length }}</span>
+      </span>
+      <span class="text-muted" style="font-size:11px;">You are the <strong>Ops Manager</strong> approver for these</span>
+    </div>
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>PO Number</th><th>Date</th><th>Raised By</th>
+          <th>Supplier</th><th>Item</th>
+          <th class="text-end">Total Value</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for po in pos_pending_ops %}
+        <tr>
+          <td><a href="{{ url_for('po_detail', po_id=po.id) }}" class="fw-600" style="color:#2E75B6;">{{ po.po_number }}</a></td>
+          <td>{{ po.po_date | dateformat }}</td>
+          <td>{{ po.raised_by }}</td>
+          <td>{{ po.supplier_name }}</td>
+          <td>{% if po.line_count and po.line_count > 1 %}{{ po.line_count }} SKUs ({{ po.first_item_name }}…){% else %}{{ po.first_item_name or '—' }}{% endif %}</td>
+          <td class="text-end fw-600">{{ po.total_val | currency }}</td>
+          <td>
+            <a href="{{ url_for('po_detail', po_id=po.id) }}"
+               class="btn btn-sm btn-primary py-0 px-3">
+              <i class="bi bi-check-circle me-1"></i>Review & Approve
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── POs AWAITING FINANCE APPROVAL ─────────────────────────────────────── -->
+{% if pos_pending_fin %}
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3 d-flex justify-content-between align-items-center"
+         style="background:#EFF8F0;border-bottom:1px solid #A9D18E;">
+      <span style="font-weight:700;color:#375623;font-size:13px;">
+        <i class="bi bi-file-earmark-text me-1"></i>
+        Purchase Orders — Awaiting Finance Approval
+        <span class="ms-2 badge-status s-ops-approved">{{ pos_pending_fin | length }}</span>
+      </span>
+      <span class="text-muted" style="font-size:11px;">You are the <strong>Finance Manager</strong> final approver</span>
+    </div>
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>PO Number</th><th>Date</th><th>Raised By</th><th>Ops Approved By</th>
+          <th>Supplier</th><th>Item</th>
+          <th class="text-end">Total Value</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for po in pos_pending_fin %}
+        <tr>
+          <td><a href="{{ url_for('po_detail', po_id=po.id) }}" class="fw-600" style="color:#2E75B6;">{{ po.po_number }}</a></td>
+          <td>{{ po.po_date | dateformat }}</td>
+          <td>{{ po.raised_by }}</td>
+          <td>{{ po.approved_by or '—' }}</td>
+          <td>{{ po.supplier_name }}</td>
+          <td>{% if po.line_count and po.line_count > 1 %}{{ po.line_count }} SKUs ({{ po.first_item_name }}…){% else %}{{ po.first_item_name or '—' }}{% endif %}</td>
+          <td class="text-end fw-600">{{ po.total_val | currency }}</td>
+          <td>
+            <a href="{{ url_for('po_detail', po_id=po.id) }}"
+               class="btn btn-sm btn-success py-0 px-3">
+              <i class="bi bi-check-circle-fill me-1"></i>Final Approve
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── SUPPLIER REQUESTS AWAITING OPS APPROVAL ───────────────────────────── -->
+{% if sr_pending_ops %}
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3 d-flex justify-content-between align-items-center"
+         style="background:#EBF3FB;border-bottom:1px solid #BDD7EE;">
+      <span style="font-weight:700;color:#1F4E79;font-size:13px;">
+        <i class="bi bi-building me-1"></i>
+        Supplier Requests — Awaiting Ops Approval
+        <span class="ms-2 badge-status s-pending">{{ sr_pending_ops | length }}</span>
+      </span>
+    </div>
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>Request ID</th><th>Type</th><th>Supplier</th>
+          <th>Proposed Name</th><th>Raised By</th><th>Date</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sr in sr_pending_ops %}
+        <tr>
+          <td class="fw-600" style="color:#2E75B6;">{{ sr.request_id }}</td>
+          <td>
+            <span class="badge-status
+              {% if sr.request_type == 'New' %}s-received
+              {% elif sr.request_type == 'Edit' %}s-approved
+              {% else %}s-cancelled{% endif %}">
+              {{ sr.request_type }}
+            </span>
+          </td>
+          <td>{{ sr.supplier_id or '—' }}</td>
+          <td>{{ sr.prop_name or '—' }}</td>
+          <td>{{ sr.raised_by }}</td>
+          <td>{{ sr.raised_date | dateformat }}</td>
+          <td>
+            <a href="{{ url_for('supplier_request_detail', req_id=sr.id) }}"
+               class="btn btn-sm btn-primary py-0 px-3">
+              <i class="bi bi-check-circle me-1"></i>Review & Approve
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── SUPPLIER REQUESTS AWAITING FINANCE APPROVAL ───────────────────────── -->
+{% if sr_pending_fin %}
+<div class="mb-4">
+  <div class="ims-table">
+    <div class="p-3 d-flex justify-content-between align-items-center"
+         style="background:#EFF8F0;border-bottom:1px solid #A9D18E;">
+      <span style="font-weight:700;color:#375623;font-size:13px;">
+        <i class="bi bi-building me-1"></i>
+        Supplier Requests — Awaiting Finance Approval
+        <span class="ms-2 badge-status s-ops-approved">{{ sr_pending_fin | length }}</span>
+      </span>
+    </div>
+    <table class="table table-hover mb-0 sortable">
+      <thead>
+        <tr>
+          <th>Request ID</th><th>Type</th><th>Supplier</th>
+          <th>Proposed Name</th><th>Raised By</th><th>Ops Approved By</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sr in sr_pending_fin %}
+        <tr>
+          <td class="fw-600" style="color:#2E75B6;">{{ sr.request_id }}</td>
+          <td>
+            <span class="badge-status
+              {% if sr.request_type == 'New' %}s-received
+              {% elif sr.request_type == 'Edit' %}s-approved
+              {% else %}s-cancelled{% endif %}">
+              {{ sr.request_type }}
+            </span>
+          </td>
+          <td>{{ sr.supplier_id or '—' }}</td>
+          <td>{{ sr.prop_name or '—' }}</td>
+          <td>{{ sr.raised_by }}</td>
+          <td>{{ sr.ops_approved_by or '—' }}</td>
+          <td>
+            <a href="{{ url_for('supplier_request_detail', req_id=sr.id) }}"
+               class="btn btn-sm btn-success py-0 px-3">
+              <i class="bi bi-check-circle-fill me-1"></i>Final Approve
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

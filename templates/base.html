@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}IMS{% endblock %} — Inventory Management</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+<style>
+  :root {
+    --navy:   #1F4E79;
+    --blue:   #2E75B6;
+    --ltblue: #DEEAF1;
+    --gold:   #FFC000;
+    --ltgold: #FFF2CC;
+    --green:  #375623;
+    --ltgreen:#E2EFDA;
+    --sidebar-w: 240px;
+  }
+  body { background:#F4F6F9; font-family: Arial, sans-serif; font-size:14px; }
+
+  /* Sidebar */
+  #sidebar {
+    position: fixed; top:0; left:0; height:100vh; width:var(--sidebar-w);
+    background:var(--navy); display:flex; flex-direction:column;
+    z-index:1000; overflow-y:auto;
+  }
+  #sidebar .brand {
+    padding:20px 16px 16px; border-bottom:1px solid rgba(255,255,255,.15);
+  }
+  #sidebar .brand h5 { color:#fff; font-weight:700; margin:0; font-size:15px; }
+  #sidebar .brand small { color:rgba(255,255,255,.6); font-size:11px; }
+  #sidebar .nav-section {
+    padding: 12px 16px 4px; color:rgba(255,255,255,.4);
+    font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  }
+  #sidebar .nav-link {
+    color:rgba(255,255,255,.75); padding:9px 16px; border-radius:6px;
+    margin:1px 8px; font-size:13px; display:flex; align-items:center; gap:10px;
+  }
+  #sidebar .nav-link:hover   { background:rgba(255,255,255,.1); color:#fff; }
+  #sidebar .nav-link.active  { background:var(--blue); color:#fff; font-weight:600; }
+  #sidebar .nav-link .bi     { font-size:15px; width:18px; text-align:center; }
+  #sidebar .user-card {
+    margin-top:auto; padding:14px 16px; border-top:1px solid rgba(255,255,255,.1);
+  }
+  #sidebar .user-card .name  { color:#fff; font-size:13px; font-weight:600; }
+  #sidebar .user-card .role  { font-size:11px; }
+
+  /* Role badge colours */
+  .role-admin            { color:#FFD700; }
+  .role-finance_manager  { color:#90EE90; }
+  .role-finance_exec     { color:#68D391; }
+  .role-ops_manager      { color:#FF9F7F; }
+  .role-ops_planner      { color:#87CEEB; }
+  .role-ops_exec         { color:#B0C4DE; }
+
+  /* Main content */
+  #main { margin-left:var(--sidebar-w); min-height:100vh; }
+  .topbar {
+    background:#fff; border-bottom:1px solid #e0e0e0;
+    padding:12px 24px; display:flex; align-items:center;
+    justify-content:space-between; position:sticky; top:0; z-index:100;
+  }
+  .topbar h4 { margin:0; font-size:18px; font-weight:700; color:var(--navy); }
+  .content   { padding:24px; }
+
+  /* Cards */
+  .kpi-card {
+    background:#fff; border-radius:10px; padding:20px; border:1px solid #e8e8e8;
+    transition:.2s;
+  }
+  .kpi-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.08); }
+  .kpi-card .kpi-icon {
+    width:44px; height:44px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center; font-size:20px;
+  }
+  .kpi-card .kpi-value { font-size:24px; font-weight:700; color:var(--navy); }
+  .kpi-card .kpi-label { font-size:12px; color:#888; font-weight:500; margin-top:2px; }
+
+  /* Tables */
+  .ims-table { background:#fff; border-radius:10px; border:1px solid #e8e8e8; overflow:hidden; }
+  .ims-table .table { margin:0; }
+  .ims-table .table thead th {
+    background:var(--navy); color:#fff; font-size:12px;
+    font-weight:600; padding:10px 14px; border:none; white-space:nowrap;
+  }
+  .ims-table .table tbody td { padding:10px 14px; vertical-align:middle; border-color:#f0f0f0; }
+  .ims-table .table tbody tr:hover { background:#f9fbfc; }
+
+  /* Status badges */
+  .badge-status { font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; }
+  .s-draft             { background:#f0f0f0; color:#666; }
+  .s-pending           { background:#FFF3CD; color:#856404; }
+  .s-approved          { background:#D1ECF1; color:#0C5460; }
+  .s-deposit           { background:#CCE5FF; color:#004085; }
+  .s-shipped           { background:#D4E6F1; color:#1a4f70; }
+  .s-received          { background:#D4EDDA; color:#155724; }
+  .s-ops-approved      { background:#E2F0D9; color:#375623; }
+  .s-cancelled         { background:#F8D7DA; color:#721C24; }
+  .s-returned          { background:#FFE5B4; color:#7a3800; }
+  .s-partial           { background:#F3E5F5; color:#6A1B9A; }
+  .s-closed-partial    { background:#E8F4F8; color:#1a5276; }
+
+  /* Role-gated field labels */
+  .field-finance { border-left:3px solid #28a745; padding-left:8px; }
+  .field-ops     { border-left:3px solid #17a2b8; padding-left:8px; }
+
+  .role-badge-finance { background:#D4EDDA; color:#155724; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; }
+  .role-badge-ops     { background:#D1ECF1; color:#0C5460; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; }
+
+  /* Form card */
+  .form-card { background:#fff; border-radius:10px; border:1px solid #e8e8e8; padding:24px; }
+  .form-section-title {
+    font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--navy); border-bottom:2px solid var(--ltblue); padding-bottom:6px; margin-bottom:16px;
+  }
+  .form-control:focus, .form-select:focus { border-color:var(--blue); box-shadow:0 0 0 .2rem rgba(46,117,182,.2); }
+  .btn-primary   { background:var(--blue); border-color:var(--blue); }
+  .btn-primary:hover { background:var(--navy); border-color:var(--navy); }
+  .btn-navy      { background:var(--navy); border-color:var(--navy); color:#fff; }
+  .btn-navy:hover { background:#163d61; color:#fff; }
+
+  /* FIFO table */
+  .fifo-open    { background:#E2EFDA; }
+  .fifo-partial { background:#FFF3CD; }
+  .fifo-closed  { background:#f5f5f5; color:#aaa; }
+
+  /* Alerts */
+  .flash-messages { margin-bottom:16px; }
+
+  /* Reorder alert */
+  .reorder-yes { color:#dc3545; font-weight:700; }
+  .reorder-no  { color:#28a745; }
+
+  /* Sortable table headers */
+  .ims-table .table thead th.sortable-col {
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .ims-table .table thead th.sortable-col:hover { background:#163d61; }
+  .ims-table .table thead th .sort-icon {
+    display: inline-block; margin-left: 5px; opacity: .45; font-style: normal;
+    font-size: 11px; vertical-align: middle;
+  }
+  .ims-table .table thead th.sort-asc  .sort-icon,
+  .ims-table .table thead th.sort-desc .sort-icon { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ─────────────────────────────────────────────────────────────── -->
+<div id="sidebar">
+  <div class="brand">
+    <div class="d-flex align-items-center gap-2">
+      {% if company_logo %}
+      <img src="{{ url_for('static', filename='uploads/' + company_logo) }}"
+           alt="Logo" style="height:30px;width:auto;border-radius:4px;flex-shrink:0;">
+      {% else %}
+      <i class="bi bi-box-seam" style="color:#fff;font-size:20px;"></i>
+      {% endif %}
+      <div>
+        <h5 style="color:#fff;font-weight:700;margin:0;font-size:14px;line-height:1.2;">{{ company_name }}</h5>
+        <small style="color:rgba(255,255,255,.5);font-size:10px;">Inventory Management</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-2">
+    <div class="nav-section">Main</div>
+    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+    {% if session.role in ('admin','ops_manager','finance_manager') %}
+    <a href="{{ url_for('approvals') }}" class="nav-link {% if request.endpoint=='approvals' %}active{% endif %}"
+       style="display:flex;align-items:center;justify-content:space-between;">
+      <span><i class="bi bi-check2-all me-2"></i>Approvals</span>
+      {% if pending_count %}
+      <span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;">
+        {{ pending_count }}
+      </span>
+      {% endif %}
+    </a>
+    {% endif %}
+
+    <div class="nav-section">Purchasing</div>
+    <a href="{{ url_for('po_list') }}" class="nav-link {% if request.endpoint in ('po_list','po_detail','po_new') %}active{% endif %}">
+      <i class="bi bi-file-earmark-text"></i> Purchase Orders
+    </a>
+    {% if session.role in ('admin','ops_planner') %}
+    <a href="{{ url_for('po_new') }}" class="nav-link {% if request.endpoint=='po_new' %}active{% endif %}">
+      <i class="bi bi-plus-circle"></i> New PO
+    </a>
+    {% endif %}
+    {% if session.role in ('admin','ops_planner','ops_manager') %}
+    <a href="{{ url_for('delivery_calendar') }}" class="nav-link {% if request.endpoint=='delivery_calendar' %}active{% endif %}">
+      <i class="bi bi-calendar3"></i> Delivery Calendar
+    </a>
+    <a href="{{ url_for('runout_estimator') }}" class="nav-link {% if request.endpoint=='runout_estimator' %}active{% endif %}">
+      <i class="bi bi-bar-chart-line"></i> Demand Planning
+    </a>
+    {% endif %}
+
+    <div class="nav-section">Inventory</div>
+    <a href="{{ url_for('ledger') }}" class="nav-link {% if request.endpoint in ('ledger','ledger_new') %}active{% endif %}">
+      <i class="bi bi-journal-text"></i> Inventory Ledger
+    </a>
+    {% if session.role in ('admin','ops_exec') %}
+    <a href="{{ url_for('ledger_new') }}" class="nav-link {% if request.endpoint=='ledger_new' %}active{% endif %}">
+      <i class="bi bi-plus-circle"></i> Log Movement
+    </a>
+    {% endif %}
+    {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
+    <a href="{{ url_for('mec_stockcount_new') }}" class="nav-link {% if request.endpoint in ('mec_stockcount_new','mec_stockcount_detail') %}active{% endif %}">
+      <i class="bi bi-clipboard2-check"></i> Upload Physical Count
+    </a>
+    {% endif %}
+    {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
+    <div class="nav-section">Month-End Close</div>
+    <a href="{{ url_for('mec_dashboard') }}" class="nav-link {% if request.endpoint in ('mec_dashboard','mec_stockcount_new','mec_stockcount_detail','mec_stockcount_approve','mec_reconciliation','mec_close_period') %}active{% endif %}">
+      <i class="bi bi-calendar-check"></i> MEC Dashboard
+    </a>
+    {% endif %}
+
+    {% if session.role in ('admin','finance_manager','finance_exec') %}
+    <div class="nav-section">Finance</div>
+    <a href="{{ url_for('finance_summary') }}" class="nav-link {% if request.endpoint == 'finance_summary' %}active{% endif %}">
+      <i class="bi bi-journal-bookmark"></i> AP Summary
+    </a>
+    <a href="{{ url_for('sales_list') }}" class="nav-link {% if request.endpoint in ('sales_list','sales_upload','sales_detail') %}active{% endif %}">
+      <i class="bi bi-graph-up-arrow"></i> Sales Uploads
+    </a>
+    <a href="{{ url_for('sales_report') }}" class="nav-link {% if request.endpoint == 'sales_report' %}active{% endif %}">
+      <i class="bi bi-bar-chart-line"></i> Sales Report
+    </a>
+    {% endif %}
+
+    <div class="nav-section">Master Data</div>
+    <a href="{{ url_for('supplier_list') }}" class="nav-link {% if request.endpoint in ('supplier_list','supplier_detail','supplier_request_new','supplier_request_detail') %}active{% endif %}">
+      <i class="bi bi-building"></i> Suppliers
+    </a>
+    <a href="{{ url_for('item_list') }}" class="nav-link {% if request.endpoint in ('item_list','items_import') %}active{% endif %}">
+      <i class="bi bi-boxes"></i> Items / SKUs
+    </a>
+    {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
+    <a href="{{ url_for('bundle_list') }}" class="nav-link {% if request.endpoint in ('bundle_list','bundle_add','bundle_edit','bundles_import') %}active{% endif %}">
+      <i class="bi bi-collection"></i> Bundles / Kits
+    </a>
+    {% endif %}
+    {% if session.role == 'admin' %}
+    <a href="{{ url_for('supplier_import') }}" class="nav-link {% if request.endpoint == 'supplier_import' %}active{% endif %}">
+      <i class="bi bi-cloud-upload"></i> Import Suppliers
+    </a>
+    <a href="{{ url_for('items_import') }}" class="nav-link {% if request.endpoint == 'items_import' %}active{% endif %}">
+      <i class="bi bi-cloud-upload"></i> Import Items / SKUs
+    </a>
+    <a href="{{ url_for('bundles_import') }}" class="nav-link {% if request.endpoint == 'bundles_import' %}active{% endif %}">
+      <i class="bi bi-cloud-upload"></i> Import Bundles
+    </a>
+    {% endif %}
+
+    <a href="{{ url_for('templates_page') }}" class="nav-link {% if request.endpoint in ('templates_page','template_download') %}active{% endif %}">
+      <i class="bi bi-file-earmark-arrow-down"></i> Download Templates
+    </a>
+
+    {% if session.role == 'admin' %}
+    <div class="nav-section">Settings</div>
+    <a href="{{ url_for('user_list') }}" class="nav-link {% if request.endpoint == 'user_list' %}active{% endif %}">
+      <i class="bi bi-people"></i> Manage Users
+    </a>
+    <a href="{{ url_for('company_settings') }}" class="nav-link {% if request.endpoint == 'company_settings' %}active{% endif %}">
+      <i class="bi bi-building"></i> Company Settings
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="user-card">
+    <div class="d-flex align-items-center gap-2">
+      <div style="width:32px;height:32px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:700;">
+        {{ session.full_name[0].upper() }}
+      </div>
+      <div>
+        <div class="name">{{ session.full_name }}</div>
+        <div class="role role-{{ session.role }}">
+          <i class="bi bi-shield-check"></i>
+          {{ session.role | title }}
+        </div>
+      </div>
+    </div>
+    <a href="{{ url_for('logout') }}" class="btn btn-sm mt-2 w-100"
+       style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.2);">
+      <i class="bi bi-box-arrow-right me-1"></i> Sign Out
+    </a>
+  </div>
+</div>
+
+<!-- ── MAIN ────────────────────────────────────────────────────────────────── -->
+<div id="main">
+  <div class="topbar">
+    <h4>{% block page_title %}{% endblock %}</h4>
+    <div class="d-flex align-items-center gap-3">
+      {% block topbar_actions %}{% endblock %}
+      <span class="text-muted" style="font-size:12px;">{{ now.strftime('%d %b %Y') }}</span>
+      <!-- Notification Bell -->
+      {% if unread_notif_count %}
+      <div class="dropdown">
+        <button class="btn btn-sm position-relative" style="background:none;border:none;color:#1F4E79;padding:4px 8px;"
+                type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+          <i class="bi bi-bell-fill" style="font-size:17px;"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                style="background:#dc3545;font-size:10px;padding:3px 5px;">
+            {{ unread_notif_count }}
+          </span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width:340px;max-width:420px;padding:0;overflow:hidden;">
+          <li style="background:#1F4E79;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="color:#fff;font-size:13px;font-weight:600;">
+              <i class="bi bi-bell me-1"></i> Notifications
+              <span style="background:#dc3545;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;">{{ unread_notif_count }}</span>
+            </span>
+            <form action="{{ url_for('dismiss_all_notifications') }}" method="POST" class="d-inline">
+              <button type="submit" style="background:none;border:none;color:rgba(255,255,255,.65);font-size:11px;padding:0;cursor:pointer;">Dismiss all</button>
+            </form>
+          </li>
+          {% for n in unread_notifications %}
+          <li style="border-bottom:1px solid #f0f0f0;">
+            <div style="padding:9px 14px;display:flex;align-items:flex-start;gap:10px;">
+              <span style="margin-top:2px;flex-shrink:0;">
+                {% if n.notif_type == 'warning' %}<i class="bi bi-arrow-return-left" style="color:#cc7a00;font-size:14px;"></i>
+                {% elif n.notif_type == 'success' %}<i class="bi bi-check-circle-fill" style="color:#1a7f3c;font-size:14px;"></i>
+                {% else %}<i class="bi bi-info-circle-fill" style="color:#2E75B6;font-size:14px;"></i>{% endif %}
+              </span>
+              <div style="flex:1;">
+                {% if n.po_id %}<a href="{{ url_for('po_detail', po_id=n.po_id) }}" style="font-size:12px;font-weight:600;color:#1F4E79;text-decoration:none;">{{ n.po_number }}</a> — {% endif %}
+                <span style="font-size:12px;color:#333;">{{ n.message }}</span>
+                <div style="font-size:10px;color:#aaa;margin-top:2px;">{{ n.created_at[:16] }}</div>
+              </div>
+              <form action="{{ url_for('dismiss_notification', notif_id=n.id) }}" method="POST" class="d-inline">
+                <button type="submit" style="background:none;border:none;color:#ccc;font-size:14px;padding:0;cursor:pointer;line-height:1;" title="Dismiss">&times;</button>
+              </form>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <button class="btn btn-sm" style="background:none;border:none;color:#bbb;padding:4px 8px;" title="No new notifications" disabled>
+        <i class="bi bi-bell" style="font-size:17px;"></i>
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="content">
+    {% if get_flashed_messages() %}
+    <div class="flash-messages">
+      {% for cat, msg in get_flashed_messages(with_categories=true) %}
+      <div class="alert alert-{{ cat }} alert-dismissible fade show py-2" role="alert">
+        <i class="bi bi-{% if cat=='success' %}check-circle{% elif cat=='danger' %}exclamation-triangle{% elif cat=='warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── Universal table sorter ─────────────────────────────────────────────────
+(function () {
+  function cellText(td) {
+    // Prefer explicit data-sort value; otherwise use visible text stripped of whitespace
+    if (td.dataset && td.dataset.sort) return td.dataset.sort;
+    return (td.innerText || td.textContent || "").replace(/\s+/g, " ").trim();
+  }
+  function cellVal(row, idx) {
+    const tds = row.querySelectorAll("td");
+    return tds[idx] ? cellText(tds[idx]) : "";
+  }
+  function cleanNum(v) { return parseFloat(v.replace(/[$,%\s,]/g, "")); }
+  function detectType(vals) {
+    const nonempty = vals.filter(v => v !== "" && v !== "—" && v !== "-");
+    if (nonempty.length === 0) return "str";
+    if (nonempty.every(v => !isNaN(cleanNum(v)))) return "num";
+    if (nonempty.every(v => !isNaN(Date.parse(v)))) return "date";
+    return "str";
+  }
+  function sortTable(table, colIdx, dir) {
+    const tbody = table.querySelector("tbody");
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    // Detect type from first 20 non-empty values
+    const sample = rows.map(r => cellVal(r, colIdx)).filter(v => v && v !== "—").slice(0, 20);
+    const type   = detectType(sample);
+    rows.sort(function(a, b) {
+      let va = cellVal(a, colIdx), vb = cellVal(b, colIdx);
+      const emptyA = !va || va === "—";
+      const emptyB = !vb || vb === "—";
+      if (emptyA && emptyB) return 0;
+      if (emptyA) return 1;
+      if (emptyB) return -1;
+      let cmp;
+      if (type === "num") {
+        cmp = cleanNum(va) - cleanNum(vb);
+      } else if (type === "date") {
+        cmp = new Date(va) - new Date(vb);
+      } else {
+        cmp = va.localeCompare(vb, undefined, {sensitivity: "base"});
+      }
+      return dir === "asc" ? cmp : -cmp;
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("table.sortable").forEach(function (table) {
+      const ths = Array.from(table.querySelectorAll("thead th"));
+      ths.forEach(function (th, idx) {
+        if (th.textContent.trim().toLowerCase() === "actions") return;
+        th.classList.add("sortable-col");
+        const icon = document.createElement("span");
+        icon.className = "sort-icon";
+        icon.textContent = " ⇅";  // ⇅
+        th.appendChild(icon);
+        th.addEventListener("click", function () {
+          const isAsc  = th.classList.contains("sort-asc");
+          const newDir = isAsc ? "desc" : "asc";
+          // Reset all headers in this table — null-safe
+          ths.forEach(function(t) {
+            t.classList.remove("sort-asc", "sort-desc");
+            const si = t.querySelector(".sort-icon");
+            if (si) si.textContent = " ⇅";
+          });
+          th.classList.add(newDir === "asc" ? "sort-asc" : "sort-desc");
+          const myIcon = th.querySelector(".sort-icon");
+          if (myIcon) myIcon.textContent = newDir === "asc" ? " ↑" : " ↓";
+          sortTable(table, idx, newDir);
+        });
+      });
+    });
+  });
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

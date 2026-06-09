@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Upload Sales File{% endblock %}
+{% block page_title %}<i class="bi bi-upload me-2" style="color:#2E75B6"></i>Upload Sales File{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('sales_methodology') }}" class="btn btn-sm btn-outline-primary me-2"><i class="bi bi-journal-text me-1"></i>Methodology SOP</a>
+  <a href="{{ url_for('sales_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Sales Report Details</div>
+      <form method="POST" enctype="multipart/form-data">
+        <div class="row g-3">
+
+          <!-- Step 1: Month -->
+          <div class="col-md-5">
+            <label class="form-label fw-600">
+              <span style="background:#1F4E79;color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;">1</span>
+              Accounting Month <span class="text-danger">*</span>
+            </label>
+            <input type="month" name="period" class="form-control" required
+                   value="{{ today[:7] if today is defined else '' }}">
+            <div class="form-text" style="font-size:11px;">The month these transactions are recognised in.</div>
+          </div>
+
+          <!-- Step 2: Platform -->
+          <div class="col-md-7">
+            <label class="form-label fw-600">
+              <span style="background:#1F4E79;color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;">2</span>
+              Platform / Channel <span class="text-danger">*</span>
+            </label>
+            <select name="platform" id="platformSelect" class="form-select" required onchange="onPlatformChange()">
+              <option value="" disabled selected>— Select platform —</option>
+              <optgroup label="💳 Payment Gateways">
+                <option value="Airwallex">Airwallex</option>
+                <option value="Atome">Atome</option>
+                <option value="Stripe (AndSons)">Stripe (AndSons)</option>
+                <option value="Stripe (GetOva)">Stripe (GetOva)</option>
+              </optgroup>
+              <optgroup label="🛒 Marketplaces &amp; Own Channels">
+                <option value="Lazada (AndSons)">Lazada (AndSons)</option>
+                <option value="Lazada (MM)">Lazada (MM)</option>
+                <option value="Shopee (AndSons)">Shopee (AndSons)</option>
+                <option value="Shopee (MM)">Shopee (MM)</option>
+                <option value="Shopify (MM)">Shopify (MM)</option>
+                <option value="Tiktok (AndSons)">Tiktok (AndSons)</option>
+                <option value="Tiktok (MM)">Tiktok (MM)</option>
+                <option value="Zalora">Zalora</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- Step 3: File Type (shown only for platforms with multiple file types) -->
+          <div class="col-12" id="fileTypeRow" style="display:none;">
+            <label class="form-label fw-600">
+              <span style="background:#1F4E79;color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;">3</span>
+              File Type <span class="text-danger">*</span>
+            </label>
+            <!-- Atome file types -->
+            <div id="atomeFileTypes" style="display:none;">
+              <div class="d-flex gap-2 flex-wrap">
+                <label class="file-type-card" id="ft-transaction">
+                  <input type="radio" name="file_type" value="transaction" checked onchange="onFileTypeChange()">
+                  <div class="file-type-inner">
+                    <i class="bi bi-receipt" style="font-size:20px;color:#1F4E79;display:block;margin-bottom:4px;"></i>
+                    <div style="font-weight:700;font-size:12px;color:#1F4E79;">Sales Transaction</div>
+                    <div style="font-size:10px;color:#666;margin-top:2px;">Transaction-level revenue,<br>fees &amp; receivables</div>
+                  </div>
+                </label>
+                <label class="file-type-card" id="ft-payment">
+                  <input type="radio" name="file_type" value="payment" onchange="onFileTypeChange()">
+                  <div class="file-type-inner">
+                    <i class="bi bi-bank" style="font-size:20px;color:#375623;display:block;margin-bottom:4px;"></i>
+                    <div style="font-weight:700;font-size:12px;color:#375623;">Payment Transaction</div>
+                    <div style="font-size:10px;color:#666;margin-top:2px;">Payout batches disbursed<br>to bank account</div>
+                  </div>
+                </label>
+                <label class="file-type-card" id="ft-sku" style="opacity:0.5;cursor:not-allowed;">
+                  <input type="radio" name="file_type" value="sku_sales" disabled onchange="onFileTypeChange()">
+                  <div class="file-type-inner">
+                    <i class="bi bi-box-seam" style="font-size:20px;color:#888;display:block;margin-bottom:4px;"></i>
+                    <div style="font-weight:700;font-size:12px;color:#888;">SKU Sales</div>
+                    <div style="font-size:10px;color:#999;margin-top:2px;">Order-level SKU data<br><em>Coming soon</em></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <!-- Lazada dual-file upload (replaces radio-button selection) -->
+            <div id="lazadaFileTypes" style="display:none;">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-600 mb-1" style="font-size:13px;">
+                    <i class="bi bi-receipt-cutoff me-1" style="color:#1F4E79;"></i>Income Details File
+                    <span class="text-muted fw-400" style="font-size:11px;">(optional)</span>
+                  </label>
+                  <input type="file" name="income_file" id="incomeFileInput" class="form-control" accept=".xlsx,.xls">
+                  <div class="form-text" style="font-size:11px;">Monthly <em>Income Overview</em> export — fees, GST split, deferred AR.</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-600 mb-1" style="font-size:13px;">
+                    <i class="bi bi-wallet2 me-1" style="color:#375623;"></i>Wallet File
+                    <span class="text-muted fw-400" style="font-size:11px;">(optional)</span>
+                  </label>
+                  <input type="file" name="wallet_file" id="walletFileInput" class="form-control" accept=".xlsx,.xls">
+                  <div class="form-text" style="font-size:11px;">Monthly <em>Wallet</em> export — settlements, withdrawals, top-ups.</div>
+                </div>
+                <div class="col-12">
+                  <div class="alert py-2 mb-0" style="font-size:12px;background:#EFF6FF;border:1px solid #BDD7EE;">
+                    <i class="bi bi-info-circle me-1" style="color:#1F4E79;"></i>
+                    Upload one or both files at once. After processing you'll be taken to a combined report showing both Income Details and Wallet data together.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="parserNote" class="mt-2" style="display:none;"></div>
+          </div>
+
+          <!-- Period From / To -->
+          <div class="col-md-6">
+            <label class="form-label fw-600">Report Date From <span class="text-muted fw-400" style="font-size:11px;">(optional)</span></label>
+            <input type="date" name="period_from" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">Report Date To <span class="text-muted fw-400" style="font-size:11px;">(optional)</span></label>
+            <input type="date" name="period_to" class="form-control">
+          </div>
+
+          <!-- Step 4: File (hidden for Lazada dual-upload mode) -->
+          <div class="col-12" id="singleFileDiv">
+            <label class="form-label fw-600">
+              <span id="fileStepNum" style="background:#1F4E79;color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;">4</span>
+              Report File <span class="text-danger">*</span>
+            </label>
+            <input type="file" name="sales_file" id="salesFileInput" class="form-control" accept=".csv,.xlsx,.xls" required>
+            <small class="text-muted">Accepts CSV or Excel (.xlsx / .xls). Max 5,000 rows.</small>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-600">Notes <span class="text-muted fw-400" style="font-size:11px;">(optional)</span></label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Includes returns adjustment for March campaign…"></textarea>
+          </div>
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Upload &amp; Process</button>
+            <a href="{{ url_for('sales_list') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+
+        </div>
+      </form>
+    </div>
+
+    <!-- Platform notes reference -->
+    <div class="form-card mt-3">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="form-section-title mb-0"><i class="bi bi-info-circle me-2"></i>Platform Parser Reference</div>
+        <a href="{{ url_for('sales_methodology') }}" class="btn btn-sm btn-outline-primary" style="font-size:12px;">
+          <i class="bi bi-journal-text me-1"></i>View Full Methodology SOP
+        </a>
+      </div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead><tr style="background:#f0f4f8;">
+          <th>Platform</th><th>File Types</th><th>Parser</th><th>What it captures</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="fw-600">Atome</td>
+            <td>
+              <span style="background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;">Transaction</span>
+              <span style="background:#E2EFDA;color:#375623;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:3px;">Payment</span>
+            </td>
+            <td><span style="background:#E2EFDA;color:#375623;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;">Smart</span></td>
+            <td>Brand split, GST extraction, AR vs cash, platform fees, accounting entries, anomaly flags</td>
+          </tr>
+          <tr>
+            <td class="fw-600">Lazada (AndSons / MM)</td>
+            <td>
+              <span style="background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;">Income Details</span>
+              <span style="background:#E2EFDA;color:#375623;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:3px;">Wallet</span>
+            </td>
+            <td><span style="background:#E2EFDA;color:#375623;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;">Smart</span></td>
+            <td>22 fee-name categories, GST split, deferred AR flag, wallet movement by sub-type, prior-month AR knock-off</td>
+          </tr>
+          <tr style="color:#888;">
+            <td>Airwallex</td>
+            <td>—</td>
+            <td><span style="background:#f0f4f8;color:#555;border-radius:4px;padding:1px 7px;font-size:11px;">Generic</span></td>
+            <td>Raw rows stored — custom parser coming once sample file received</td>
+          </tr>
+          <tr style="color:#888;">
+            <td>Stripe (AndSons / GetOva)</td>
+            <td>—</td>
+            <td><span style="background:#f0f4f8;color:#555;border-radius:4px;padding:1px 7px;font-size:11px;">Generic</span></td>
+            <td>Raw rows stored — custom parser coming once sample file received</td>
+          </tr>
+          <tr style="color:#888;">
+            <td>Shopee / Tiktok / Shopify / Zalora</td>
+            <td>—</td>
+            <td><span style="background:#f0f4f8;color:#555;border-radius:4px;padding:1px 7px;font-size:11px;">Generic</span></td>
+            <td>Raw rows stored with SKU mapping — custom parsers coming</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.file-type-card {
+  cursor: pointer;
+  border: 2px solid #dee2e6;
+  border-radius: 10px;
+  padding: 0;
+  min-width: 130px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.file-type-card input[type="radio"] { display: none; }
+.file-type-card .file-type-inner {
+  padding: 12px 14px;
+  text-align: center;
+  border-radius: 8px;
+}
+.file-type-card:has(input:checked) {
+  border-color: #1F4E79;
+  box-shadow: 0 0 0 3px rgba(31,78,121,.12);
+  background: #EFF6FF;
+}
+.file-type-card:has(input:checked) .file-type-inner { background: transparent; }
+</style>
+<script>
+const PLATFORMS_WITH_FILE_TYPES = {
+  "Atome": { group: "atome", defaults: "transaction" }
+  // Lazada now uses dual-file mode (income_file + wallet_file)
+};
+
+function onPlatformChange() {
+  var sel           = document.getElementById("platformSelect").value;
+  var ftRow         = document.getElementById("fileTypeRow");
+  var note          = document.getElementById("parserNote");
+  var singleFileDiv = document.getElementById("singleFileDiv");
+  var salesFileInput= document.getElementById("salesFileInput");
+  var cfg           = PLATFORMS_WITH_FILE_TYPES[sel];
+  var isLazada      = sel.startsWith("Lazada");
+
+  document.getElementById("atomeFileTypes").style.display  = "none";
+  document.getElementById("lazadaFileTypes").style.display = "none";
+
+  if (isLazada) {
+    // Dual-file mode: show lazadaFileTypes section, hide single file input
+    ftRow.style.display = "block";
+    document.getElementById("lazadaFileTypes").style.display = "block";
+    singleFileDiv.style.display = "none";
+    salesFileInput.removeAttribute("required");
+    note.style.display = "none";
+    document.getElementById("fileStepNum").textContent = "3";
+  } else if (cfg) {
+    // Atome: show radio buttons + single file input
+    ftRow.style.display = "block";
+    document.getElementById(cfg.group + "FileTypes").style.display = "block";
+    var radios = document.querySelectorAll('#' + cfg.group + 'FileTypes input[type="radio"]');
+    radios.forEach(function(r, i) { r.checked = (i === 0); });
+    singleFileDiv.style.display = "block";
+    salesFileInput.setAttribute("required", "");
+    document.getElementById("fileStepNum").textContent = "4";
+    onFileTypeChange();
+  } else {
+    // All other platforms: hide file type row, show single file input
+    ftRow.style.display = "none";
+    note.style.display = "none";
+    singleFileDiv.style.display = "block";
+    salesFileInput.setAttribute("required", "");
+    document.getElementById("fileStepNum").textContent = "3";
+  }
+}
+
+function onFileTypeChange() {
+  var sel  = document.querySelector('input[name="file_type"]:checked');
+  var note = document.getElementById("parserNote");
+  if (!sel) { note.style.display = "none"; return; }
+
+  var msgs = {
+    "transaction": '<div class="alert py-2 mb-0" style="font-size:12px;background:#EFF6FF;border:1px solid #BDD7EE;">' +
+      '<i class="bi bi-receipt me-1" style="color:#1F4E79;"></i><strong style="color:#1F4E79;">Atome Transaction File.</strong> ' +
+      'Upload the <em>transactions_</em> export. Parser will extract revenue (incl GST), GST split, ' +
+      'MDR &amp; flat fees, AR balance (CONFIRMED), and settled cash (FULLY_SETTLED).</div>',
+    "payment": '<div class="alert py-2 mb-0" style="font-size:12px;background:#EDF7EE;border:1px solid #A3CFA8;">' +
+      '<i class="bi bi-bank me-1" style="color:#375623;"></i><strong style="color:#375623;">Atome Payment File.</strong> ' +
+      'Upload the <em>payout_list_</em> export. Parser will extract payout batches, total disbursed to bank, ' +
+      'platform fees (split ex-GST and GST), and sponsored voucher adjustments.</div>',
+    "sku_sales": '<div class="alert alert-warning py-2 mb-0" style="font-size:12px;">' +
+      '<i class="bi bi-hourglass me-1"></i><strong>SKU Sales — coming soon.</strong> ' +
+      'The order-level file format is pending confirmation. Upload will be enabled once format is defined.</div>',
+    "income": '<div class="alert py-2 mb-0" style="font-size:12px;background:#EFF6FF;border:1px solid #BDD7EE;">' +
+      '<i class="bi bi-receipt-cutoff me-1" style="color:#1F4E79;"></i><strong style="color:#1F4E79;">Lazada Income Details.</strong> ' +
+      'Upload the monthly <em>Income Overview</em> export. Parser categorises all 22 fee names, ' +
+      'splits GST on revenue lines, and flags deferred items (next-month release date).</div>',
+    "wallet": '<div class="alert py-2 mb-0" style="font-size:12px;background:#EDF7EE;border:1px solid #A3CFA8;">' +
+      '<i class="bi bi-wallet2 me-1" style="color:#375623;"></i><strong style="color:#375623;">Lazada Wallet.</strong> ' +
+      'Upload the monthly <em>Wallet</em> export. Parser summarises settlements, auto-withdrawals, ' +
+      'and Sponsored Solutions top-ups, and flags prior-month AR settlements for knock-off.</div>'
+  };
+
+  note.innerHTML = msgs[sel.value] || "";
+  note.style.display = sel.value in msgs ? "block" : "none";
+}
+</script>
+{% endblock %}

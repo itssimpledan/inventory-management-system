@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Purchase Orders{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-text me-2" style="color:#2E75B6"></i>Purchase Orders{% endblock %}
+{% block topbar_actions %}
+  {% if session.role in ('admin','ops_planner') %}
+  <a href="{{ url_for('po_new') }}" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>New PO</a>
+  {% endif %}
+  <a href="{{ url_for('export_pos') }}" class="btn btn-sm btn-outline-secondary" title="Export to CSV"><i class="bi bi-download me-1"></i>CSV</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-2">
+      <label class="form-label" style="font-size:12px;font-weight:600;">Status</label>
+      <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        {% for s in statuses %}
+        <option value="{{ s }}" {% if status_filter==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" style="font-size:12px;font-weight:600;">Supplier</label>
+      <select name="supplier" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Suppliers</option>
+        {% for s in suppliers %}
+        <option value="{{ s.supplier_id }}" {% if supplier_filter==s.supplier_id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" style="font-size:12px;font-weight:600;">SKU</label>
+      <select name="item" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All SKUs</option>
+        {% for i in items %}
+        <option value="{{ i.item_id }}" {% if item_filter==i.item_id %}selected{% endif %}>{{ i.item_id }} — {{ i.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" style="font-size:12px;font-weight:600;">Due From</label>
+      <input type="date" name="due_from" class="form-control form-control-sm" value="{{ due_from_filter or '' }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" style="font-size:12px;font-weight:600;">Due To</label>
+      <input type="date" name="due_to" class="form-control form-control-sm" value="{{ due_to_filter or '' }}">
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filter</button>
+      <a href="{{ url_for('po_list') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+    </div>
+  </form>
+</div>
+
+<!-- Summary badges -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <span style="font-size:13px;color:#555;">{{ pos|length }} PO(s)</span>
+  {% set total_outstanding = namespace(v=0) %}
+  {% for po in pos %}
+    {% set total_outstanding.v = total_outstanding.v + ((po.total_val or 0) - (po.amount_paid or 0)) %}
+  {% endfor %}
+  {% if total_outstanding.v > 0 %}
+  <span style="font-size:13px;font-weight:700;color:#842029;">
+    Outstanding: ${{ "{:,.2f}".format(total_outstanding.v) }}
+  </span>
+  {% endif %}
+</div>
+
+<!-- Table -->
+<div class="ims-table">
+  <table class="table table-hover mb-0 sortable" style="font-size:13px;">
+    <thead><tr>
+      <th>PO Number</th>
+      <th>Date</th>
+      <th>Supplier</th>
+      <th>Item(s)</th>
+      <th class="text-end">PO Value</th>
+      <th class="text-end">Paid</th>
+      <th class="text-end">Outstanding</th>
+      <th>Status</th>
+      <th>Payment Due</th>
+      <th>Actions</th>
+    </tr></thead>
+    <tbody>
+      {% for po in pos %}
+      {% set outstanding = (po.total_val or 0) - (po.amount_paid or 0) %}
+      {% set is_overdue = po.payment_due_date and po.payment_due_date < today and outstanding > 0 %}
+      <tr {% if is_overdue %}style="background:#FFF5F5;"{% endif %}>
+        <td>
+          <a href="{{ url_for('po_detail', po_id=po.id) }}" class="fw-700" style="color:#1F4E79;text-decoration:none;">
+            {{ po.po_number }}
+          </a>
+        </td>
+        <td style="white-space:nowrap;">{{ po.po_date | dateformat }}</td>
+        <td>{{ po.supplier_name }}</td>
+        <td>
+          {% if po.line_count and po.line_count == 1 %}
+            {# Single SKU — show ID badge and name #}
+            <span style="font-size:11px;background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 6px;font-weight:600;">{{ po.first_item_id or '—' }}</span>
+            <span style="font-size:13px;">{{ po.first_item_name or '—' }}</span>
+          {% elif po.line_count and po.line_count > 1 %}
+            {# Multiple SKUs — show count badge + up to 3 names #}
+            <span style="font-size:11px;background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 6px;font-weight:600;">{{ po.line_count }} SKUs</span>
+            <div style="font-size:12px;color:#555;margin-top:3px;line-height:1.5;">
+              <span>{{ po.first_item_name }}</span>{% if po.second_item_name %}<br><span>{{ po.second_item_name }}</span>{% endif %}{% if po.third_item_name %}<br><span>{{ po.third_item_name }}</span>{% endif %}
+              {% if po.line_count > 3 %}<br><a href="{{ url_for('po_detail', po_id=po.id) }}" style="font-size:11px;color:#2E75B6;">+{{ po.line_count - 3 }} more…</a>{% endif %}
+            </div>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td class="text-end fw-600">${{ "{:,.2f}".format(po.total_val or 0) }} <small class="text-muted">{{ po.currency }}</small></td>
+        <td class="text-end" style="color:{% if (po.amount_paid or 0) > 0 %}#375623{% else %}#aaa{% endif %};">
+          ${{ "{:,.2f}".format(po.amount_paid or 0) }}
+        </td>
+        <td class="text-end fw-600"
+            style="color:{% if is_overdue %}#842029{% elif outstanding <= 0 %}#375623{% else %}#1F4E79{% endif %};">
+          {% if outstanding <= 0 %}
+            <span style="font-size:11px;background:#E2EFDA;color:#375623;border-radius:4px;padding:2px 6px;">Settled</span>
+          {% else %}
+            ${{ "{:,.2f}".format(outstanding) }}
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge-status
+            {% if po.status == 'Fully Paid – Received' %}s-received
+            {% elif po.status == 'Deposit Paid' %}s-deposit
+            {% elif po.status == 'Approved' %}s-approved
+            {% elif po.status == 'Ops Approved' %}s-ops-approved
+            {% elif po.status == 'Pending Approval' %}s-pending
+            {% elif po.status == 'Fully Paid – Shipped' %}s-shipped
+            {% elif po.status == 'Partially Received' %}s-partial
+            {% elif po.status == 'Cancelled' %}s-cancelled
+            {% elif po.status == 'Returned' %}s-returned
+            {% else %}s-draft{% endif %}">{{ po.status }}</span>
+        </td>
+        <td style="white-space:nowrap;">
+          {% if po.payment_due_date %}
+            <span style="{% if is_overdue %}color:#842029;font-weight:700;{% endif %}">
+              {{ po.payment_due_date | dateformat }}
+              {% if is_overdue %}<i class="bi bi-exclamation-triangle-fill ms-1" style="color:#dc3545;"></i>{% endif %}
+            </span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="{{ url_for('po_detail', po_id=po.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2"
+               title="View"><i class="bi bi-eye"></i></a>
+            {% if session.role in ('admin','finance_exec','finance_manager')
+               and po.status in ('Approved','Deposit Paid','Fully Paid – Shipped','Fully Paid – Received') %}
+            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                    title="Update Payment"
+                    onclick="openPayModal({{ po.id }}, '{{ po.po_number }}', {{ po.total_val or 0 }}, {{ po.amount_paid or 0 }})">
+              <i class="bi bi-cash-coin"></i>
+            </button>
+            {% endif %}
+            {% if session.role in ('admin','ops_exec','ops_planner')
+               and po.status in ('Approved','Deposit Paid','Fully Paid – Shipped','Partially Received') %}
+            <a href="{{ url_for('po_detail', po_id=po.id) }}#receive-section"
+               class="btn btn-sm btn-outline-success py-0 px-2" title="Record Receipt">
+              <i class="bi bi-box-seam"></i>
+            </a>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">No purchase orders found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Quick Pay Modal -->
+<div class="modal fade" id="payModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#1F4E79;">
+        <h6 class="modal-title text-white mb-0"><i class="bi bi-cash-coin me-2"></i>Update Payment</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="payForm" method="POST">
+        <input type="hidden" name="redirect" value="list">
+        <div class="modal-body">
+          <p class="mb-1" style="font-size:13px;">PO: <strong id="payPoNum"></strong></p>
+          <p class="mb-3" style="font-size:13px;">Total Value: <strong id="payTotal"></strong></p>
+          <div class="mb-3">
+            <label class="form-label" style="font-size:12px;font-weight:600;">Total Amount Paid to Date</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">$</span>
+              <input type="number" id="payAmount" name="amount_paid" class="form-control"
+                     step="0.01" min="0" placeholder="0.00">
+            </div>
+            <div class="form-text">Cumulative total paid including previous payments.</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" style="font-size:12px;font-weight:600;">Payment Date</label>
+            <input type="date" id="payDate" name="payment_date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary">Save Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openPayModal(poId, poNum, totalVal, amountPaid) {
+  document.getElementById('payPoNum').textContent = poNum;
+  document.getElementById('payTotal').textContent = '$' + totalVal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('payAmount').value = amountPaid > 0 ? amountPaid.toFixed(2) : '';
+  // Default date to today
+  var today = new Date().toISOString().slice(0,10);
+  document.getElementById('payDate').value = today;
+  document.getElementById('payForm').action = '/pos/' + poId + '/quick_pay';
+  new bootstrap.Modal(document.getElementById('payModal')).show();
+}
+</script>
+{% endblock %}

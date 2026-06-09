@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Import Suppliers{% endblock %}
+{% block page_title %}<i class="bi bi-cloud-upload me-2" style="color:#2E75B6"></i>Import Suppliers{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('supplier_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Suppliers</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+
+    {% if result %}
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-check2-circle me-2" style="color:#1a7f3c"></i>Import Complete</div>
+      <div class="row g-3 mb-3">
+        <div class="col-4">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#1F4E79">{{ result.created }}</div>
+            <div style="font-size:12px;color:#555;">New suppliers created</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#2E75B6">{{ result.updated }}</div>
+            <div style="font-size:12px;color:#555;">Existing updated</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="kpi-card text-center p-3">
+            <div style="font-size:28px;font-weight:700;color:#888">{{ result.skipped }}</div>
+            <div style="font-size:12px;color:#555;">Rows skipped</div>
+          </div>
+        </div>
+      </div>
+      {% if result.errors %}
+      <div class="alert alert-warning mb-3" style="font-size:13px;">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i>Warnings:</strong>
+        <ul class="mb-0 ps-3 mt-1">{% for e in result.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('supplier_list') }}" class="btn btn-primary"><i class="bi bi-building me-1"></i>View Suppliers</a>
+        <a href="{{ url_for('supplier_import') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat me-1"></i>Import Another</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Upload Supplier List</div>
+      <p style="font-size:13px;color:#555;margin-bottom:16px;">
+        Upload a CSV or Excel file with your supplier data. Existing suppliers will be updated; new ones will be created.
+        <a href="{{ url_for('template_download', name='suppliers') }}" class="ms-1" style="font-size:12px;">
+          <i class="bi bi-download me-1"></i>Download template
+        </a>
+      </p>
+      <form method="POST" enctype="multipart/form-data">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-600">File <span class="text-danger">*</span></label>
+            <input type="file" name="supplier_file" class="form-control" accept=".csv,.xlsx,.xls" required>
+            <small class="text-muted">Accepts .csv, .xlsx, or .xls</small>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-cloud-upload me-1"></i>Import</button>
+            <a href="{{ url_for('supplier_list') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="form-card mt-3">
+      <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>Expected Columns</div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead><tr style="background:#f0f4f8;">
+          <th>Column Name</th><th>Required</th><th>Example</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="fw-600">supplier_id</td><td><span class="badge bg-danger">Required</span></td><td>SUP-001</td></tr>
+          <tr><td class="fw-600">name</td><td><span class="badge bg-danger">Required</span></td><td>Acme Trading Pte Ltd</td></tr>
+          <tr><td>contact_name</td><td><span class="badge bg-secondary">Optional</span></td><td>John Tan</td></tr>
+          <tr><td>email</td><td><span class="badge bg-secondary">Optional</span></td><td>john@acme.com</td></tr>
+          <tr><td>phone</td><td><span class="badge bg-secondary">Optional</span></td><td>+65 9123 4567</td></tr>
+          <tr><td>payment_terms</td><td><span class="badge bg-secondary">Optional</span></td><td>Net 30</td></tr>
+          <tr><td>lead_days</td><td><span class="badge bg-secondary">Optional</span></td><td>14</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

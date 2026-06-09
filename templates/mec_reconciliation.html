@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Reconciliation {{ period }}{% endblock %}
+{% block page_title %}
+  <i class="bi bi-bar-chart-line me-2" style="color:#5B2C8C"></i>Month-End Reconciliation — {{ period }}
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('mec_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  <a href="{{ url_for('export_stockcount_recon', period=period) }}"
+     class="btn btn-sm btn-outline-secondary ms-1" title="Export reconciliation to CSV">
+    <i class="bi bi-download me-1"></i>CSV
+  </a>
+  {% if can_close and role in ('admin','finance_manager') %}
+  <form method="POST" action="{{ url_for('mec_close_period', period=period) }}" class="d-inline ms-2">
+    <button type="submit" class="btn btn-sm btn-success"
+            onclick="return confirm('Close period {{ period }}? This will seed {{ period }} closing balances as the opening balance for next month. This cannot be undone.')">
+      <i class="bi bi-lock-fill me-1"></i>Close Period
+    </button>
+  </form>
+  {% elif period_obj and period_obj.status == 'Closed' %}
+  <span class="btn btn-sm btn-success disabled ms-2">
+    <i class="bi bi-check-circle-fill me-1"></i>Period Closed
+  </span>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if period_obj and period_obj.status == 'Closed' %}
+<div class="alert alert-success py-2 mb-3" style="font-size:13px;">
+  <i class="bi bi-lock-fill me-1"></i>
+  Period <strong>{{ period }}</strong> was closed on {{ period_obj.closed_at[:10] if period_obj.closed_at }}
+  by {{ period_obj.closed_by | title if period_obj.closed_by }}.
+  Closing balances have been seeded as the next period's opening.
+</div>
+{% endif %}
+
+{% if not sc %}
+<div class="alert alert-warning mb-3" style="font-size:13px;">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  No approved stockcount for this period. The reconciliation below uses the calculated book balance only.
+  <a href="{{ url_for('mec_stockcount_new') }}" class="alert-link">Upload stockcount</a>
+</div>
+{% endif %}
+
+<!-- ── Section 1: Inventory Movement ─────────────────────────────────────── -->
+<div class="form-card mb-3">
+  <div class="form-section-title"><i class="bi bi-box-seam me-2"></i>Inventory Movement</div>
+  <div class="table-responsive">
+    <table class="table table-sm" style="font-size:12px;">
+      <thead>
+        <tr>
+          <th>SKU</th><th>Item</th>
+          <th class="text-end">Opening</th>
+          <th class="text-end">Receipts</th>
+          <th class="text-end">Adj +</th>
+          <th class="text-end">Adj −</th>
+          <th class="text-end">Book</th>
+          <th class="text-end">Physical</th>
+          <th class="text-end">Variance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in inv_rows %}
+        <tr class="{% if r.variance < -0.001 %}table-danger{% elif r.variance > 0.001 %}table-success{% endif %}">
+          <td><span style="background:#DEEAF1;color:#1F4E79;border-radius:3px;padding:1px 5px;font-size:11px;font-weight:600;">{{ r.item_id }}</span></td>
+          <td>{{ r.item_name }}</td>
+          <td class="text-end">{{ "{:,.0f}".format(r.opening) }}</td>
+          <td class="text-end text-success">{% if r.receipts_in %}+{{ "{:,.0f}".format(r.receipts_in) }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if r.adj_in %}+{{ "{:,.0f}".format(r.adj_in) }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if r.adj_out %}−{{ "{:,.0f}".format(r.adj_out) }}{% else %}—{% endif %}</td>
+          <td class="text-end fw-600">{{ "{:,.0f}".format(r.book) }}</td>
+          <td class="text-end fw-700" style="color:#375623;">{{ "{:,.0f}".format(r.physical) }}</td>
+          <td class="text-end fw-700">
+            {% if r.variance > 0.001 %}<span class="text-success">+{{ "{:,.0f}".format(r.variance) }}</span>
+            {% elif r.variance < -0.001 %}<span class="text-danger">{{ "{:,.0f}".format(r.variance) }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-center text-muted py-3">No inventory data.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot style="background:#F0F4F8;font-weight:700;">
+        <tr>
+          <td colspan="6" class="text-end">Totals</td>
+          <td class="text-end">{{ "{:,.0f}".format(total_book) }}</td>
+          <td class="text-end" style="color:#375623;">{{ "{:,.0f}".format(total_physical) }}</td>
+          <td class="text-end {% if total_variance < -0.001 %}text-danger{% elif total_variance > 0.001 %}text-success{% else %}text-muted{% endif %}">
+            {% if total_variance > 0.001 %}+{% endif %}{{ "{:,.0f}".format(total_variance) }}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% if total_variance != 0 and sc %}
+  <div class="mt-2 p-2 rounded" style="background:#FFF8EC;border:1px solid #FFD6A0;font-size:12px;">
+    <i class="bi bi-info-circle me-1"></i>
+    {% if sc.status == 'Approved' %}
+      Variance adjustments have been posted to the ledger.
+    {% else %}
+      Variance of <strong>{{ "{:,.0f}".format(total_variance|abs) }} units</strong> pending. Ops Manager must approve the stockcount to post adjustments.
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Section 2: Sales & COS ─────────────────────────────────────────────── -->
+<div class="form-card mb-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="form-section-title mb-0"><i class="bi bi-currency-dollar me-2"></i>Sales & Cost of Sales</div>
+    {% if role in ('admin','finance_exec','finance_manager') %}
+    <a href="{{ url_for('sales_upload') }}" class="btn btn-sm btn-outline-warning">
+      <i class="bi bi-upload me-1"></i>Upload Sales
+    </a>
+    {% endif %}
+  </div>
+
+  {% if not sales_uploads_list %}
+  <div class="text-muted text-center py-3" style="font-size:13px;">
+    No sales uploaded for {{ period }} yet.
+    {% if role in ('admin','finance_exec','finance_manager') %}
+    <a href="{{ url_for('sales_upload') }}">Upload now →</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <!-- Sales summary cards -->
+  <div class="row g-2 mb-3">
+    <div class="col-md-3">
+      <div class="rounded p-3 text-center" style="background:#EEF6FF;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Units Sold</div>
+        <div style="font-size:20px;font-weight:700;color:#1F4E79;">{{ "{:,.0f}".format(total_sales_qty) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="rounded p-3 text-center" style="background:#F0FBF4;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Gross Revenue</div>
+        <div style="font-size:20px;font-weight:700;color:#375623;">${{ "{:,.2f}".format(total_revenue) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="rounded p-3 text-center" style="background:#FFF5F5;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Cost of Sales</div>
+        <div style="font-size:20px;font-weight:700;color:#842029;">${{ "{:,.2f}".format(total_cos) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="rounded p-3 text-center" style="background:#F5F0FB;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Gross Margin</div>
+        <div style="font-size:20px;font-weight:700;color:#5B2C8C;">${{ "{:,.2f}".format(gross_margin) }}</div>
+        <div style="font-size:11px;color:#888;">{{ "{:.1f}".format(gm_pct) }}%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COS detail per SKU -->
+  {% if cos_detail %}
+  <div class="table-responsive">
+    <table class="table table-sm" style="font-size:12px;">
+      <thead>
+        <tr>
+          <th>SKU</th><th>Item</th>
+          <th class="text-end">Units Sold</th>
+          <th class="text-end">Gross Revenue</th>
+          <th class="text-end">WACC</th>
+          <th class="text-end">COS</th>
+          <th class="text-end">Margin %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in cos_detail %}
+        {% set margin = ((r.revenue - r.cos) / r.revenue * 100) if r.revenue else 0 %}
+        <tr>
+          <td><span style="background:#DEEAF1;color:#1F4E79;border-radius:3px;padding:1px 5px;font-size:11px;font-weight:600;">{{ r.item_id }}</span></td>
+          <td>{{ r.item_name }}</td>
+          <td class="text-end">{{ "{:,.0f}".format(r.qty) }}</td>
+          <td class="text-end">${{ "{:,.2f}".format(r.revenue) }}</td>
+          <td class="text-end text-muted">${{ "{:.4f}".format(r.wacc) }}</td>
+          <td class="text-end text-danger">${{ "{:,.2f}".format(r.cos) }}</td>
+          <td class="text-end">
+            <span style="color:{% if margin >= 30 %}#375623{% elif margin >= 0 %}#7a5900{% else %}#842029{% endif %};">
+              {{ "{:.1f}".format(margin) }}%
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot style="background:#F0F4F8;font-weight:700;">
+        <tr>
+          <td colspan="2" class="text-end">Total</td>
+          <td class="text-end">{{ "{:,.0f}".format(total_sales_qty) }}</td>
+          <td class="text-end">${{ "{:,.2f}".format(total_revenue) }}</td>
+          <td></td>
+          <td class="text-end text-danger">${{ "{:,.2f}".format(total_cos) }}</td>
+          <td class="text-end">{{ "{:.1f}".format(gm_pct) }}%</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+<!-- ── Section 3: Timing Disclosure ──────────────────────────────────────── -->
+<div class="form-card mb-3">
+  <div class="form-section-title"><i class="bi bi-clock-history me-2"></i>Timing Disclosure</div>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="rounded p-3" style="background:#EEF6FF;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Units Sold (Recognised)</div>
+        <div style="font-size:22px;font-weight:700;color:#1F4E79;">{{ "{:,.0f}".format(total_sales_qty) }}</div>
+        <div style="font-size:11px;color:#888;">Per confirmed platform sales</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="rounded p-3" style="background:#F0FBF4;">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Net Inventory Movement</div>
+        <div style="font-size:22px;font-weight:700;color:#375623;">{{ "{:,.0f}".format(total_inv_movement) }}</div>
+        <div style="font-size:11px;color:#888;">Receipts + Adj-in − Adj-out this period</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="rounded p-3" style="background:{% if timing_gap|abs > 0.001 %}#FFF8EC{% else %}#F0FBF4{% endif %};">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;">Timing Gap</div>
+        <div style="font-size:22px;font-weight:700;color:{% if timing_gap|abs > 0.001 %}#7a5900{% else %}#375623{% endif %};">
+          {% if timing_gap > 0.001 %}+{% endif %}{{ "{:,.0f}".format(timing_gap) }}
+        </div>
+        <div style="font-size:11px;color:#888;">Sales recognised vs inventory movement</div>
+      </div>
+    </div>
+  </div>
+  <div class="mt-3 p-3 rounded" style="background:#F8F9FA;font-size:12px;color:#555;border-left:3px solid #aaa;">
+    <strong>Note:</strong> A timing gap is expected and normal. Platform sales are recognised on order confirmation,
+    while physical inventory moves on delivery. This gap represents orders confirmed in {{ period }} but
+    not yet physically dispatched (or vice versa). It will be disclosed in the period notes and is not
+    a reconciling error.
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Delivery Calendar{% endblock %}
+{% block page_title %}<i class="bi bi-calendar3 me-2" style="color:#2E75B6"></i>Delivery Calendar{% endblock %}
+
+{% block content %}
+
+{# ── Status colour helper macros ───────────────────────────────────────────── #}
+{% macro po_dot_color(status) %}
+{% if status in ('Approved','Deposit Paid','Fully Paid – Shipped','Fully Paid – Received','Partially Received') %}#1a7a4a
+{% elif status == 'Ops Approved' %}#d97706
+{% elif status == 'Pending Approval' %}#2563eb
+{% else %}#888{% endif %}
+{% endmacro %}
+
+{% macro po_bg_color(status) %}
+{% if status in ('Approved','Deposit Paid','Fully Paid – Shipped','Fully Paid – Received','Partially Received') %}#D1FAE5
+{% elif status == 'Ops Approved' %}#FEF3C7
+{% elif status == 'Pending Approval' %}#DBEAFE
+{% else %}#F3F4F6{% endif %}
+{% endmacro %}
+
+{% macro po_border_color(status) %}
+{% if status in ('Approved','Deposit Paid','Fully Paid – Shipped','Fully Paid – Received','Partially Received') %}#34D399
+{% elif status == 'Ops Approved' %}#FCD34D
+{% elif status == 'Pending Approval' %}#93C5FD
+{% else %}#D1D5DB{% endif %}
+{% endmacro %}
+
+<div class="row g-3 mb-3 align-items-center">
+  <!-- Month Navigation -->
+  <div class="col-auto">
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('delivery_calendar', year=prev_year, month=prev_month, q=search) }}"
+         class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+      <span style="font-size:17px;font-weight:700;color:#1F4E79;min-width:150px;text-align:center;">
+        {{ month_name }} {{ year }}
+      </span>
+      <a href="{{ url_for('delivery_calendar', year=next_year, month=next_month, q=search) }}"
+         class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+      <a href="{{ url_for('delivery_calendar') }}" class="btn btn-sm btn-outline-primary ms-2">Today</a>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="col-md-4 ms-auto">
+    <form method="GET" class="d-flex gap-2">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="month" value="{{ month }}">
+      <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm"
+             placeholder="Search PO, supplier, SKU…">
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
+      {% if search %}<a href="{{ url_for('delivery_calendar', year=year, month=month) }}" class="btn btn-sm btn-outline-secondary">✕</a>{% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="d-flex gap-3 mb-3 flex-wrap" style="font-size:12px;">
+  <span><span style="display:inline-block;width:12px;height:12px;background:#D1FAE5;border:1.5px solid #34D399;border-radius:3px;"></span> Approved / Paid</span>
+  <span><span style="display:inline-block;width:12px;height:12px;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:3px;"></span> Ops Approved</span>
+  <span><span style="display:inline-block;width:12px;height:12px;background:#DBEAFE;border:1.5px solid #93C5FD;border-radius:3px;"></span> Pending Approval</span>
+  <span><span style="display:inline-block;width:12px;height:12px;background:#F3F4F6;border:1.5px solid #D1D5DB;border-radius:3px;"></span> Other</span>
+</div>
+
+{% if search_results is defined and search %}
+<!-- Search Results -->
+<div class="form-card mb-3">
+  <div class="form-section-title"><i class="bi bi-search me-2"></i>Search Results for "{{ search }}" ({{ search_results|length }})</div>
+  {% if search_results %}
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:13px;">
+      <thead><tr style="background:#f0f4f8;">
+        <th>PO Number</th><th>Supplier</th><th>First SKU</th><th>Status</th><th>Expected Delivery</th>
+      </tr></thead>
+      <tbody>
+      {% for po in search_results %}
+      <tr>
+        <td><a href="{{ url_for('po_detail', po_id=po.id) }}?ref=calendar" class="fw-700" style="color:#1F4E79;">{{ po.po_number }}</a></td>
+        <td>{{ po.supplier_name }}</td>
+        <td>{{ po.first_item_name or '—' }}</td>
+        <td>
+          <span style="background:{{ po_bg_color(po.status) }};border:1px solid {{ po_border_color(po.status) }};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">
+            {{ po.status }}
+          </span>
+        </td>
+        <td>
+          {% if po.expected_delivery_date %}{{ po.expected_delivery_date }}{% else %}<em class="text-muted">Not set</em>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted mb-0" style="font-size:13px;">No POs match "{{ search }}".</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Calendar Grid -->
+<div class="form-card mb-3" style="overflow-x:auto;">
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0;min-width:700px;">
+    <!-- Day headers -->
+    {% for day_name in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+    <div style="background:#1F4E79;color:#fff;text-align:center;padding:8px 4px;font-size:12px;font-weight:700;border-right:1px solid #2E75B6;">{{ day_name }}</div>
+    {% endfor %}
+
+    <!-- Empty cells before month start (first_weekday: 0=Mon) -->
+    {% for _ in range(first_weekday) %}
+    <div style="background:#f8f9fa;border:1px solid #e9ecef;min-height:120px;"></div>
+    {% endfor %}
+
+    <!-- Day cells -->
+    {% for day in range(1, num_days + 1) %}
+    {% set cell_date = "%04d-%02d-%02d" | format(year, month, day) %}
+    {% set is_today = cell_date == today %}
+    {% set day_pos = calendar_pos.get(day, []) %}
+    <div style="border:1px solid #e9ecef;min-height:120px;padding:4px;background:{% if is_today %}#EFF8FF{% else %}#fff{% endif %};vertical-align:top;position:relative;">
+      <div style="font-size:12px;font-weight:{% if is_today %}800{% else %}600{% endif %};color:{% if is_today %}#1F4E79{% else %}#555{% endif %};margin-bottom:4px;">
+        {{ day }}{% if is_today %} <span style="font-size:10px;background:#2E75B6;color:#fff;border-radius:3px;padding:0 4px;">Today</span>{% endif %}
+      </div>
+      {% for po in day_pos %}
+      <a href="{{ url_for('po_detail', po_id=po.id) }}?ref=calendar"
+         style="display:block;margin-bottom:3px;text-decoration:none;border-radius:4px;padding:3px 5px;font-size:11px;font-weight:600;background:{{ po_bg_color(po.status) }};border:1px solid {{ po_border_color(po.status) }};color:#1a1a1a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"
+         title="{{ po.po_number }} · {{ po.supplier_name }} · {{ po.status }}">
+        <i class="bi bi-box-seam me-1" style="color:{{ po_dot_color(po.status) }};"></i>{{ po.po_number }}
+        <span style="font-weight:400;font-size:10px;color:#555;"> · {{ po.supplier_name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <!-- Trailing empty cells -->
+    {% set total_cells = first_weekday + num_days %}
+    {% set trailing = (7 - (total_cells % 7)) % 7 %}
+    {% for _ in range(trailing) %}
+    <div style="background:#f8f9fa;border:1px solid #e9ecef;min-height:120px;"></div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- POs without delivery date -->
+<div class="form-card">
+  <div class="form-section-title">
+    <i class="bi bi-calendar-x me-2" style="color:#dc3545;"></i>
+    POs Without a Delivery Date
+    <span class="ms-2" style="background:#F8D7DA;color:#842029;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:700;">{{ no_date_pos|length }}</span>
+  </div>
+
+  {% if no_date_pos %}
+  <p style="font-size:13px;color:#555;" class="mb-3">Set a delivery date to place these POs on the calendar.</p>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:13px;">
+      <thead><tr style="background:#f0f4f8;">
+        <th>PO Number</th><th>Supplier</th><th>First SKU</th><th>Status</th>
+        {% if session.role in ('admin','ops_planner','ops_manager') %}<th>Set Delivery Date</th>{% endif %}
+      </tr></thead>
+      <tbody>
+      {% for po in no_date_pos %}
+      <tr id="nodate-row-{{ po.id }}">
+        <td><a href="{{ url_for('po_detail', po_id=po.id) }}?ref=calendar" class="fw-700" style="color:#1F4E79;">{{ po.po_number }}</a></td>
+        <td>{{ po.supplier_name }}</td>
+        <td>{{ po.first_item_name or '—' }}</td>
+        <td>
+          <span style="background:{{ po_bg_color(po.status) }};border:1px solid {{ po_border_color(po.status) }};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">
+            {{ po.status }}
+          </span>
+        </td>
+        {% if session.role in ('admin','ops_planner','ops_manager') %}
+        <td>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="date" class="form-control form-control-sm" style="max-width:160px;"
+                   id="date-input-{{ po.id }}"
+                   placeholder="YYYY-MM-DD">
+            <button type="button" class="btn btn-sm btn-primary py-0 px-2"
+                    onclick="setDeliveryDate({{ po.id }}, '{{ po.po_number }}')">
+              <i class="bi bi-check-lg me-1"></i>Save
+            </button>
+          </div>
+          <div id="date-msg-{{ po.id }}" style="font-size:11px;margin-top:2px;"></div>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-4" style="color:#aaa;font-size:13px;">
+    <i class="bi bi-check-circle" style="font-size:28px;display:block;color:#34D399;margin-bottom:6px;"></i>
+    All active POs have an expected delivery date.
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setDeliveryDate(poId, poNum) {
+  const input = document.getElementById('date-input-' + poId);
+  const msgEl = document.getElementById('date-msg-' + poId);
+  const newDate = input.value.trim();
+  if (!newDate) {
+    msgEl.style.color = '#842029';
+    msgEl.textContent = 'Please select a date first.';
+    return;
+  }
+  msgEl.style.color = '#555';
+  msgEl.textContent = 'Saving…';
+  fetch('/pos/' + poId + '/update_delivery_date', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({expected_delivery_date: newDate})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      msgEl.style.color = '#1a7a4a';
+      msgEl.textContent = '✓ Date saved for ' + poNum + '. Reload to see on calendar.';
+      // Fade out the row
+      const row = document.getElementById('nodate-row-' + poId);
+      if (row) { row.style.opacity = '0.4'; }
+    } else {
+      msgEl.style.color = '#842029';
+      msgEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+    }
+  })
+  .catch(() => {
+    msgEl.style.color = '#842029';
+    msgEl.textContent = 'Network error.';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+{% block title %}{% if edit_mode %}Edit {{ edit_po_number }}{% else %}New PO{% endif %}{% endblock %}
+{% block page_title %}
+  {% if edit_mode %}
+    <i class="bi bi-pencil-square me-2" style="color:#E67E22"></i>Edit PO — {{ edit_po_number }}
+  {% else %}
+    <i class="bi bi-plus-circle me-2" style="color:#2E75B6"></i>New Purchase Order
+  {% endif %}
+{% endblock %}
+{% block topbar_actions %}
+  {% if edit_mode %}
+    <a href="{{ url_for('po_detail', po_id=edit_po_id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to PO</a>
+  {% else %}
+    <a href="{{ url_for('po_list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% if edit_mode %}
+<div class="alert mb-3 py-2 px-3" style="background:#FFF3CD;border:1px solid #FFB347;border-radius:8px;font-size:13px;color:#7a4800;">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  <strong>Editing a returned PO.</strong> Make your corrections, then click <strong>Save &amp; Resubmit</strong> to send it back for approval.
+</div>
+{% endif %}
+<form method="POST" id="po_form"
+  {% if edit_mode %}action="{{ url_for('po_edit', po_id=edit_po_id) }}"{% endif %}>
+<div class="row g-3">
+  <div class="col-lg-8">
+
+    <!-- Section 1: Supplier & Order Info -->
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-truck me-2"></i>Supplier & Order Info</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-600">PO Number <span class="text-danger">*</span></label>
+          <input type="text" name="po_number" class="form-control"
+                 value="{{ form_data.po_number if form_data else suggested_po }}"
+                 required placeholder="e.g. PO-2026-001" style="text-transform:uppercase;"
+                 {% if edit_mode %}readonly style="background:#f0f4f8;color:#555;"{% endif %}>
+          <small class="text-muted">{% if edit_mode %}PO number cannot be changed when editing.{% else %}Auto-suggested — edit if needed{% endif %}</small>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-600">PO Date <span class="text-danger">*</span></label>
+          <input type="date" name="po_date" class="form-control"
+                 value="{{ form_data.po_date if form_data else today }}" required>
+        </div>
+        <div class="col-md-12">
+          <label class="form-label fw-600">Supplier <span class="text-danger">*</span></label>
+          <select name="supplier_id" id="supplier_select" class="form-select" required
+                  onchange="loadSupplierItems(this.value)">
+            <option value="">Select supplier…</option>
+            {% for s in suppliers %}
+            <option value="{{ s.supplier_id }}"
+              {% if form_data and form_data.supplier_id == s.supplier_id %}selected{% endif %}>
+              {{ s.supplier_id }} — {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: SKU Line Items -->
+    <div class="form-card mb-3">
+      <div class="form-section-title d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul me-2"></i>SKU Line Items</span>
+        <div class="d-flex align-items-center gap-2">
+          <label class="mb-0 text-muted" style="font-size:12px;font-weight:600;">Currency:</label>
+          <select name="currency" id="currency_select" class="form-select form-select-sm"
+                  style="width:90px;" onchange="recalc()">
+            {% for ccy in ['SGD','USD','EUR','GBP','AUD','CNY'] %}
+            <option value="{{ ccy }}"
+              {% if form_data and form_data.currency == ccy %}selected
+              {% elif not form_data and ccy == 'SGD' %}selected{% endif %}>{{ ccy }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn btn-sm btn-outline-primary"
+                  onclick="addLine()" id="add_line_btn" disabled>
+            <i class="bi bi-plus-circle me-1"></i>Add SKU
+          </button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" id="lines_table" style="font-size:13px;">
+          <thead style="background:#f0f4f8;">
+            <tr>
+              <th style="min-width:220px;">Item / SKU <span class="text-danger">*</span></th>
+              <th style="min-width:90px;">Qty Ordered <span class="text-danger">*</span></th>
+              <th style="min-width:130px;">Unit Price (<span id="currency_label">SGD</span>) <span class="text-danger">*</span></th>
+              <th style="min-width:90px;">Free Units</th>
+              <th style="width:40px;"></th>
+            </tr>
+          </thead>
+          <tbody id="lines_body"></tbody>
+        </table>
+      </div>
+      <div id="lines_hint" class="mt-2" style="font-size:12px;color:#856404;">
+        <i class="bi bi-info-circle me-1"></i>Select a supplier above to enable adding SKUs.
+      </div>
+    </div>
+
+    <!-- Section 3: Costs & Dates -->
+    <div class="form-card mb-3">
+      <div class="form-section-title"><i class="bi bi-calendar2-date me-2"></i>Costs & Dates</div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label fw-600">Freight / Shipping</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            <input type="number" name="freight_costs" id="freight" class="form-control"
+                   step="0.01" min="0"
+                   value="{{ form_data.freight_costs if form_data else '0' }}"
+                   oninput="recalc()">
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-600">Other Costs</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            <input type="number" name="other_costs" id="other_costs" class="form-control"
+                   step="0.01" min="0"
+                   value="{{ form_data.other_costs if form_data else '0' }}"
+                   oninput="recalc()">
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-600">Deposit %</label>
+          <div class="input-group">
+            <input type="number" name="deposit_pct" id="deposit_pct" class="form-control"
+                   step="0.01" min="0" max="1"
+                   value="{{ form_data.deposit_pct if form_data else '0' }}"
+                   oninput="recalc()">
+            <span class="input-group-text">%</span>
+          </div>
+          <small class="text-muted">e.g. 0.30 = 30%</small>
+        </div>
+        <div class="col-md-3"><!-- spacer --></div>
+        <div class="col-md-6">
+          <label class="form-label fw-600">Payment Due Date</label>
+          <input type="date" name="payment_due_date" class="form-control"
+                 value="{{ form_data.payment_due_date if form_data else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-600">Expected Delivery</label>
+          <input type="date" name="expected_delivery_date" class="form-control"
+                 value="{{ form_data.expected_delivery_date if form_data else '' }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Notes -->
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-sticky me-2"></i>Notes</div>
+      <textarea name="notes" class="form-control" rows="3"
+                placeholder="Any additional notes about this PO…">{{ form_data.notes if form_data else '' }}</textarea>
+    </div>
+
+  </div>
+
+  <!-- Right: Live Summary -->
+  <div class="col-lg-4">
+    <div class="form-card" style="position:sticky;top:80px;">
+      <div class="form-section-title"><i class="bi bi-receipt me-2"></i>PO Summary</div>
+      <div style="font-size:13px;">
+        <div class="d-flex justify-content-between py-2 border-bottom">
+          <span class="text-muted">SKU Lines</span>
+          <span id="s_lines" class="fw-600">—</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom">
+          <span class="text-muted">Total Units (incl. free)</span>
+          <span id="s_total_qty" class="fw-700" style="color:#1F4E79;">—</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom">
+          <span class="text-muted">Lines Subtotal</span>
+          <span id="s_subtotal" class="fw-600">—</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom">
+          <span class="text-muted">Freight</span>
+          <span id="s_freight" class="fw-600">—</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom">
+          <span class="text-muted">Other Costs</span>
+          <span id="s_other" class="fw-600">—</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom"
+             style="background:#DEEAF1;border-radius:6px;padding:8px!important;margin:4px 0;">
+          <span class="fw-700">Total PO Value (<span id="s_ccy_label">SGD</span>)</span>
+          <span id="s_total_val" class="fw-700" style="color:#1F4E79;font-size:16px;">—</span>
+        </div>
+        <div class="d-flex justify-content-between py-2">
+          <span class="text-muted">Deposit Amount</span>
+          <span id="s_deposit" class="fw-600">—</span>
+        </div>
+      </div>
+
+      <!-- Per-SKU Eff. Unit Cost -->
+      <div id="eff_cost_section" style="display:none;margin-top:10px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+                    color:#856404;padding:6px 0;border-top:2px solid #FFF2CC;">
+          <i class="bi bi-calculator me-1"></i>Eff. Unit Cost by SKU
+        </div>
+        <div id="freight_alloc_note" style="display:none;font-size:11px;color:#555;
+             background:#FFFBF0;border-left:3px solid #FFC000;border-radius:0 4px 4px 0;
+             padding:6px 8px;margin-bottom:8px;line-height:1.5;">
+          <strong>Overhead allocation method</strong><br>
+          Freight &amp; other costs split proportionally by each line's subtotal value.<br>
+          <span style="font-family:monospace;font-size:10px;color:#856404;">
+            Alloc&#x2099; = (Line$ &divide; Total$) &times; Overhead
+          </span>
+        </div>
+        <div id="eff_cost_rows"></div>
+        <div style="font-size:10px;color:#aaa;margin-top:4px;text-align:right;">
+          Eff. cost = (subtotal + overhead) &divide; (ordered + free qty)
+        </div>
+      </div>
+
+      {% if edit_mode %}
+      <button type="submit" class="btn w-100 mt-3" style="background:#E67E22;color:#fff;border:none;">
+        <i class="bi bi-send me-2"></i>Save &amp; Resubmit for Approval
+      </button>
+      <p class="text-center text-muted mt-2 mb-0" style="font-size:11px;">
+        PO will be updated and status set back to <strong>Pending Approval</strong>
+      </p>
+      {% else %}
+      <button type="submit" class="btn btn-primary w-100 mt-3">
+        <i class="bi bi-send me-2"></i>Submit for Approval
+      </button>
+      <p class="text-center text-muted mt-2 mb-0" style="font-size:11px;">
+        PO will be created with status <strong>Pending Approval</strong>
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const prefillLines = {{ prefill_lines | safe }};
+
+function fmt(n)  { return '$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtQ(n) { return (n||0).toLocaleString('en-US',{maximumFractionDigits:0}); }
+
+let supplierItems = [];
+
+function loadSupplierItems(supplierId) {
+  const addBtn = document.getElementById('add_line_btn');
+  const hint   = document.getElementById('lines_hint');
+  if (!supplierId) {
+    supplierItems = [];
+    addBtn.disabled = true;
+    hint.innerHTML  = '<i class="bi bi-info-circle me-1"></i>Select a supplier above to enable adding SKUs.';
+    hint.style.color = '#856404';
+    document.querySelectorAll('.item-select').forEach(sel => {
+      sel.innerHTML = '<option value="">— select supplier first —</option>';
+      sel.disabled  = true;
+    });
+    return;
+  }
+  hint.innerHTML  = '<i class="bi bi-hourglass-split me-1"></i>Loading SKUs…';
+  hint.style.color = '#6c757d';
+  fetch('/api/supplier-items/' + supplierId)
+    .then(r => r.json())
+    .then(items => {
+      supplierItems = items;
+      if (items.length === 0) {
+        hint.innerHTML  = '<i class="bi bi-exclamation-triangle me-1"></i>No SKUs linked to this supplier.';
+        hint.style.color = '#dc3545';
+        addBtn.disabled = true;
+      } else {
+        hint.innerHTML  = '<i class="bi bi-check-circle me-1"></i>' + items.length + ' SKU(s) available.';
+        hint.style.color = '#198754';
+        addBtn.disabled = false;
+      }
+      // Re-populate existing selects
+      document.querySelectorAll('.item-select').forEach(sel => {
+        const prev = sel.value;
+        populateItemSelect(sel, prev);
+      });
+      // Restore prefill lines or add blank first row
+      const tbody = document.getElementById('lines_body');
+      if (tbody.children.length === 0) {
+        if (prefillLines.length > 0) {
+          prefillLines.forEach(pl => addLine(pl));
+        } else if (items.length > 0) {
+          addLine();
+        }
+      }
+    })
+    .catch(() => {
+      hint.innerHTML  = '<i class="bi bi-x-circle me-1"></i>Error loading SKUs.';
+      hint.style.color = '#dc3545';
+      addBtn.disabled = true;
+    });
+}
+
+function populateItemSelect(sel, selectedVal) {
+  sel.innerHTML = '<option value="">Select SKU…</option>';
+  if (!supplierItems.length) {
+    sel.innerHTML = '<option value="">— select supplier first —</option>';
+    sel.disabled  = true;
+    return;
+  }
+  supplierItems.forEach(i => {
+    const opt = document.createElement('option');
+    opt.value         = i.item_id;
+    opt.textContent   = i.item_id + ' — ' + i.name;
+    opt.dataset.price = i.unit_price || 0;
+    if (i.item_id === selectedVal) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.disabled = false;
+}
+
+function addLine(prefill) {
+  const tbody = document.getElementById('lines_body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>
+      <select name="item_id[]" class="form-select form-select-sm item-select"
+              required onchange="fillLinePrice(this)">
+        <option value="">Select SKU…</option>
+      </select>
+    </td>
+    <td>
+      <input type="number" name="qty_ordered[]" class="form-control form-control-sm line-qty"
+             min="1" step="1" required placeholder="0" oninput="recalc()">
+    </td>
+    <td>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text">$</span>
+        <input type="number" name="unit_price[]" class="form-control form-control-sm line-price"
+               step="0.0001" min="0" required placeholder="0.0000" oninput="recalc()">
+      </div>
+    </td>
+    <td>
+      <input type="number" name="free_units[]" class="form-control form-control-sm line-free"
+             min="0" step="1" value="0" oninput="recalc()">
+    </td>
+    <td class="text-center">
+      <button type="button" class="btn btn-outline-danger btn-sm px-2"
+              onclick="removeLine(this)" title="Remove">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>`;
+  tbody.appendChild(tr);
+  populateItemSelect(tr.querySelector('.item-select'), prefill?.item_id || '');
+  if (prefill) {
+    tr.querySelector('.line-qty').value   = prefill.qty   || '';
+    tr.querySelector('.line-price').value = prefill.price || '';
+    tr.querySelector('.line-free').value  = prefill.free  || '0';
+  }
+  recalc();
+}
+
+function removeLine(btn) {
+  btn.closest('tr').remove();
+  recalc();
+}
+
+function fillLinePrice(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && parseFloat(opt.dataset.price || 0) > 0) {
+    const priceInput = sel.closest('tr').querySelector('.line-price');
+    if (!parseFloat(priceInput.value)) {
+      priceInput.value = parseFloat(opt.dataset.price).toFixed(4);
+    }
+  }
+  recalc();
+}
+
+function recalc() {
+  const rows    = document.querySelectorAll('#lines_body tr');
+  const fr      = parseFloat(document.getElementById('freight').value)     || 0;
+  const oc      = parseFloat(document.getElementById('other_costs').value) || 0;
+  const dp      = parseFloat(document.getElementById('deposit_pct').value) || 0;
+  const overhead = fr + oc;
+  const ccy     = document.getElementById('currency_select').value;
+
+  const lines = [];
+  let totalSub = 0, totalQty = 0;
+  rows.forEach(row => {
+    const sel      = row.querySelector('.item-select');
+    const qty      = parseFloat(row.querySelector('.line-qty')?.value)   || 0;
+    const price    = parseFloat(row.querySelector('.line-price')?.value) || 0;
+    const free     = parseFloat(row.querySelector('.line-free')?.value)  || 0;
+    const sub      = qty * price;
+    const tq       = qty + free;
+    totalSub += sub;
+    totalQty += tq;
+    lines.push({ itemId: sel?.value||'', itemText: sel?.options[sel?.selectedIndex]?.text||'', qty, price, free, sub, tq });
+  });
+
+  const totalVal = totalSub + overhead;
+  const deposit  = totalVal * dp;
+
+  document.getElementById('currency_label').textContent = ccy;
+  document.getElementById('s_ccy_label').textContent    = ccy;
+  document.getElementById('s_lines').textContent     = rows.length || '—';
+  document.getElementById('s_total_qty').textContent = rows.length ? fmtQ(totalQty) : '—';
+  document.getElementById('s_subtotal').textContent  = rows.length ? fmt(totalSub)  : '—';
+  document.getElementById('s_freight').textContent   = fmt(fr);
+  document.getElementById('s_other').textContent     = fmt(oc);
+  document.getElementById('s_total_val').textContent = rows.length ? fmt(totalVal)  : '—';
+  document.getElementById('s_deposit').textContent   = rows.length ? fmt(deposit)   : '—';
+
+  const section   = document.getElementById('eff_cost_section');
+  const allocNote = document.getElementById('freight_alloc_note');
+  const rowsDiv   = document.getElementById('eff_cost_rows');
+  if (!lines.length) { section.style.display = 'none'; return; }
+  section.style.display   = '';
+  allocNote.style.display = overhead > 0 ? '' : 'none';
+
+  rowsDiv.innerHTML = lines.map((l, idx) => {
+    const share   = totalSub > 0 ? l.sub / totalSub : 1 / lines.length;
+    const alloc   = share * overhead;
+    const effCost = l.tq > 0 ? (l.sub + alloc) / l.tq : 0;
+    const pct     = (share * 100).toFixed(1);
+    const label   = l.itemId || 'Line '+(idx+1);
+    const detail  = overhead > 0
+      ? `${fmt(l.sub)} + ${fmt(alloc)} overhead (${pct}%) &divide; ${fmtQ(l.tq)} units`
+      : `${fmt(l.sub)} &divide; ${fmtQ(l.tq)} units`;
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;
+                        padding:5px 0;border-bottom:1px solid #f4f4f4;">
+      <div>
+        <span style="background:#DEEAF1;color:#1F4E79;border-radius:3px;padding:1px 6px;
+                     font-size:11px;font-weight:700;">${label}</span>
+        <span style="color:#999;font-size:10px;display:block;margin-top:1px;">${detail}</span>
+      </div>
+      <div style="font-weight:700;color:#856404;white-space:nowrap;padding-left:8px;font-size:13px;">
+        $${effCost.toFixed(4)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Submit validation ────────────────────────────────────────────────────────
+document.getElementById('po_form').addEventListener('submit', function(e) {
+  const rows = document.querySelectorAll('#lines_body tr');
+  if (rows.length === 0) {
+    e.preventDefault();
+    showValidationError('Please add at least one SKU line item before submitting.');
+    return;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row   = rows[i];
+    const sel   = row.querySelector('.item-select');
+    const price = parseFloat(row.querySelector('.line-price')?.value) || 0;
+    const free  = parseFloat(row.querySelector('.line-free')?.value)  || 0;
+    const qty   = parseFloat(row.querySelector('.line-qty')?.value)   || 0;
+    if (!sel?.value) {
+      e.preventDefault();
+      showValidationError(`Line ${i+1}: Please select an item / SKU.`);
+      row.querySelector('.item-select')?.focus();
+      return;
+    }
+    if (qty <= 0) {
+      e.preventDefault();
+      showValidationError(`Line ${i+1} (${sel.value}): Qty Ordered must be greater than 0.`);
+      row.querySelector('.line-qty')?.focus();
+      return;
+    }
+    if (price === 0 && free === 0) {
+      e.preventDefault();
+      showValidationError(`Line ${i+1} (${sel.value}): Unit price and free units cannot both be 0.\nEnter a unit price, or enter free units for complimentary goods.`);
+      row.querySelector('.line-price')?.focus();
+      return;
+    }
+  }
+});
+
+function showValidationError(msg) {
+  let el = document.getElementById('js_validation_error');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'js_validation_error';
+    el.className = 'alert alert-danger alert-dismissible fade show';
+    el.style.cssText = 'font-size:13px;margin-bottom:12px;';
+    document.querySelector('.flash-messages') || document.querySelector('.content').prepend(
+      Object.assign(document.createElement('div'), {className:'flash-messages'})
+    );
+    document.querySelector('.flash-messages').prepend(el);
+  }
+  el.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${msg.replace(/\n/g,'<br>')}
+    <button type="button" class="btn-close" onclick="this.closest('.alert').remove()"></button>`;
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// Auto-trigger supplier load on page restore (after form error)
+window.addEventListener('DOMContentLoaded', () => {
+  recalc();
+  const sel = document.getElementById('supplier_select');
+  if (sel && sel.value) loadSupplierItems(sel.value);
+});
+</script>
+{% endblock %}

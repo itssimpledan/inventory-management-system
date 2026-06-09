@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Inventory Ledger{% endblock %}
+{% block page_title %}<i class="bi bi-journal-text me-2" style="color:#2E75B6"></i>Inventory Ledger{% endblock %}
+{% block topbar_actions %}
+  {% if session.role in ('admin','ops_exec') %}
+  <a href="{{ url_for('ledger_new') }}" class="btn btn-sm btn-primary"><i class="bi bi-plus me-1"></i>Log Movement</a>
+  {% endif %}
+  <a href="{{ url_for('export_ledger') }}" class="btn btn-sm btn-outline-secondary" title="Export to CSV"><i class="bi bi-download me-1"></i>CSV</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Month + Item Filter -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label" style="font-size:12px;font-weight:600;color:#555;">Month</label>
+      <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for m in months %}
+        <option value="{{ m }}" {% if m == month_filter %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+        {% if month_filter not in months %}
+        <option value="{{ month_filter }}" selected>{{ month_filter }}</option>
+        {% endif %}
+      </select>
+    </div>
+    <div class="col-md-5">
+      <label class="form-label" style="font-size:12px;font-weight:600;color:#555;">Item (movements only)</label>
+      <select name="item" class="form-select form-select-sm">
+        <option value="">All Items</option>
+        {% for i in items %}
+        <option value="{{ i.item_id }}" {% if i.item_id == item_filter %}selected{% endif %}>{{ i.item_id }} — {{ i.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+      <a href="{{ url_for('ledger', month=month_filter) }}" class="btn btn-sm btn-outline-secondary flex-fill">Clear</a>
+    </div>
+  </form>
+</div>
+
+<!-- Section 1: Month-end Physical Count -->
+{% if count_upload %}
+<div class="mb-4">
+  <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+    <span style="font-weight:700;color:#1F4E79;font-size:14px;">
+      <i class="bi bi-clipboard2-check me-1"></i>Month-End Physical Count — {{ month_filter }}
+    </span>
+    <span class="badge-status s-received" style="font-size:11px;">{{ count_upload.status }}</span>
+    <span style="font-size:12px;color:#888;">
+      Uploaded {{ count_upload.uploaded_at[:10] if count_upload.uploaded_at else '' }}
+      by {{ count_upload.uploaded_by or '—' }}
+    </span>
+    <span class="ms-auto fw-700" style="font-size:13px;color:#1F4E79;">
+      Total Value:
+      <span style="font-size:18px;color:#1a5c2e;margin-left:4px;">${{ "{:,.2f}".format(total_count_value) }}</span>
+    </span>
+  </div>
+  <div class="ims-table">
+    <div class="table-responsive">
+      <table class="table table-hover sortable mb-0" style="font-size:13px;">
+        <thead><tr>
+          <th>Item ID <span class="sort-icon">⇅</span></th>
+          <th>Item Name <span class="sort-icon">⇅</span></th>
+          <th class="text-end">Physical Qty <span class="sort-icon">⇅</span></th>
+          <th class="text-end">WACC ($/unit) <span class="sort-icon">⇅</span></th>
+          <th class="text-end">Inventory Value <span class="sort-icon">⇅</span></th>
+        </tr></thead>
+        <tbody>
+          {% for row in count_rows %}
+          <tr>
+            <td><span style="background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 8px;font-weight:600;font-size:12px;">{{ row.item_id }}</span></td>
+            <td>{{ row.item_name }}</td>
+            <td class="text-end fw-600">{{ "{:,.0f}".format(row.physical_qty) }}</td>
+            <td class="text-end" style="color:#555;">${{ "%.4f"|format(row.wacc) }}</td>
+            <td class="text-end fw-700" style="color:#1a5c2e;">${{ "{:,.2f}".format(row.value) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-3">No lines found.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if count_rows %}
+        <tfoot><tr style="background:#f0f4f8;font-weight:700;">
+          <td colspan="4" class="text-end pe-3">Total</td>
+          <td class="text-end" style="color:#1a5c2e;">${{ "{:,.2f}".format(total_count_value) }}</td>
+        </tr></tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-light border mb-4 py-2" style="font-size:13px;">
+  <i class="bi bi-clipboard2-x me-1 text-muted"></i>
+  No physical count uploaded for <strong>{{ month_filter }}</strong>.
+  <a href="{{ url_for('mec_stockcount_new') }}" class="ms-2">Upload Physical Count →</a>
+</div>
+{% endif %}
+
+<!-- Section 2: Manual Movements -->
+<div>
+  <div class="d-flex align-items-center gap-3 mb-2">
+    <span style="font-weight:700;color:#1F4E79;font-size:14px;">
+      <i class="bi bi-arrow-left-right me-1"></i>Manual Movements — {{ month_filter }}
+    </span>
+    <span style="font-size:12px;color:#888;">{{ entries|length }} transaction{% if entries|length != 1 %}s{% endif %}</span>
+  </div>
+  <div class="ims-table">
+    <div class="table-responsive">
+      <table class="table table-hover sortable" style="font-size:13px;">
+        <thead><tr>
+          <th>Txn ID</th><th>Date</th><th>Type</th><th>Reference</th><th>Item</th>
+          <th class="text-end">Qty In</th><th class="text-end">Qty Out</th>
+          <th class="text-end">Unit Cost</th>
+          <th class="text-end">Value In</th><th class="text-end">Value Out</th>
+          <th>Posted By</th>
+        </tr></thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td class="fw-600" style="color:#1F4E79;font-size:12px;">{{ e.txn_id }}</td>
+            <td style="white-space:nowrap;font-size:12px;">{{ e.txn_date | dateformat }}</td>
+            <td>
+              <span class="badge-status
+                {% if e.txn_type == 'PO Receipt' %}s-received
+                {% elif e.txn_type.startswith('(+)') %}s-received
+                {% elif e.txn_type in ('(-) Sale','Sale') %}s-deposit
+                {% elif e.txn_type.startswith('(-)') %}s-cancelled
+                {% elif 'Adjustment' in e.txn_type %}s-pending
+                {% else %}s-draft{% endif %}">{{ e.txn_type }}</span>
+            </td>
+            <td style="font-size:12px;">{{ e.reference or '—' }}</td>
+            <td>
+              <span style="font-size:11px;background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 6px;font-weight:600;">{{ e.item_id }}</span>
+              <span style="font-size:12px;"> {{ e.item_name }}</span>
+            </td>
+            <td class="text-end fw-600 text-success">{% if e.qty_in %}+{{ "{:,.0f}".format(e.qty_in) }}{% else %}—{% endif %}</td>
+            <td class="text-end fw-600 text-danger">{% if e.qty_out %}−{{ "{:,.0f}".format(e.qty_out) }}{% else %}—{% endif %}</td>
+            <td class="text-end">${{ "%.4f"|format(e.unit_cost or 0) }}</td>
+            <td class="text-end text-success fw-600">{% if e.qty_in %}<small>$</small>{{ "{:,.2f}".format((e.qty_in or 0)*(e.unit_cost or 0)) }}{% else %}—{% endif %}</td>
+            <td class="text-end text-danger fw-600">{% if e.qty_out %}<small>$</small>{{ "{:,.2f}".format((e.qty_out or 0)*(e.unit_cost or 0)) }}{% else %}—{% endif %}</td>
+            <td style="font-size:12px;">{{ e.posted_by | title }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" class="text-center text-muted py-4">
+            No movements for {{ month_filter }}.
+            {% if session.role in ('admin','ops_exec') %}<a href="{{ url_for('ledger_new') }}">Log one →</a>{% endif %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

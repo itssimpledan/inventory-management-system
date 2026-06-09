@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Demand Planning{% endblock %}
+{% block page_title %}<i class="bi bi-bar-chart-line me-2" style="color:#2E75B6"></i>Demand Planning{% endblock %}
+
+{% block content %}
+<!-- Period selector -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label fw-600" style="font-size:12px;">Projection Period</label>
+      <input type="month" name="period" class="form-control form-control-sm" value="{{ period }}"
+             onchange="this.form.submit()">
+      <div class="form-text" style="font-size:11px;">Estimates inventory impact FOR this month.</div>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Apply</button>
+    </div>
+    <div class="col-auto ms-auto d-flex align-items-center gap-2">
+      {% if session.role in ('admin','ops_planner','ops_manager') %}
+      <button type="button" class="btn btn-sm btn-success" id="saveBtn" onclick="saveForecasts()">
+        <i class="bi bi-floppy me-1"></i>Save Forecast Adjustments
+      </button>
+      {% endif %}
+      <span id="saveMsg" style="font-size:12px;color:#1a7a4a;"></span>
+    </div>
+  </form>
+</div>
+
+<!-- Column Legend -->
+<div class="d-flex gap-3 flex-wrap mb-2" style="font-size:11px;color:#555;">
+  <span style="background:#EFF8FF;border:1px solid #BDD7EE;border-radius:4px;padding:2px 8px;"><strong>Opening</strong> = last MEC closing balance</span>
+  <span style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:4px;padding:2px 8px;"><strong>Outbound</strong> = prior month sales + adjustments</span>
+  <span style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:2px 8px;"><strong>Inbound (Appr)</strong> = approved POs delivering this period</span>
+  <span style="background:#F3F4F6;border:1px solid #D1D5DB;border-radius:4px;padding:2px 8px;"><strong>Inbound (Pend)</strong> = unapproved POs delivering this period</span>
+  <span style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:4px;padding:2px 8px;"><strong>Red = potential stockout</strong></span>
+</div>
+
+<!-- Main Table -->
+<div class="ims-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0" style="font-size:12px;min-width:1100px;">
+    <thead>
+      <tr style="background:#1F4E79;color:#fff;font-size:11px;">
+        <th style="min-width:160px;">SKU</th>
+        <th class="text-end" title="Last MEC closing balance" style="background:#1a4270;">Opening<br><small style="font-weight:400;opacity:.8;">Balance</small></th>
+        <th class="text-end" title="Prior month sales qty" style="background:#5c4500;">Prior Month<br><small style="font-weight:400;opacity:.8;">Outbound (Sales)</small></th>
+        <th class="text-end" title="Prior month stock adjustments" style="background:#5c4500;">Prior Month<br><small style="font-weight:400;opacity:.8;">Adjustment</small></th>
+        <th class="text-end" title="Total estimated outbound = outbound - adjustment" style="background:#5c4500;border-right:2px solid #fff;">Total Est.<br><small style="font-weight:400;opacity:.8;">Outbound</small></th>
+        <th class="text-end" title="Manually key in forecast adjustment (+ = extra out, – = extra in)" style="background:#4a1a6b;">Forecast<br><small style="font-weight:400;opacity:.8;">Adj (Manual)</small></th>
+        <th class="text-end" title="Qty expected from approved POs delivering this period" style="background:#1a5c2e;">Inbound<br><small style="font-weight:400;opacity:.8;">Approved POs</small></th>
+        <th class="text-end" title="Qty expected from unapproved POs delivering this period" style="background:#3d5c1a;">Inbound<br><small style="font-weight:400;opacity:.8;">Pending POs</small></th>
+        <th class="text-end" title="Net impact = inbound_app + inbound_pen - total_out - manual_adj" style="background:#1a4270;border-left:2px solid #fff;">Final<br><small style="font-weight:400;opacity:.8;">Net Impact</small></th>
+        <th class="text-end" title="Opening + net impact. Red = stockout risk." style="background:#1a4270;">Final<br><small style="font-weight:400;opacity:.8;">Est. Balance</small></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set is_negative = row.final_balance < 0 %}
+      <tr {% if is_negative %}style="background:#FEF2F2;"{% endif %}>
+        <td>
+          <span class="fw-700" style="color:#1F4E79;font-size:12px;">{{ row.item_id }}</span><br>
+          <small class="text-muted">{{ row.name }}</small>
+        </td>
+        <td class="text-end fw-600" style="color:#1F4E79;">{{ "{:,.0f}".format(row.opening) }}</td>
+        <td class="text-end" style="color:#856404;">{{ "{:,.0f}".format(row.outbound) }}</td>
+        <td class="text-end" style="color:{% if row.adjustment < 0 %}#842029{% elif row.adjustment > 0 %}#1a7a4a{% else %}#aaa{% endif %};">
+          {{ "{:+,.0f}".format(row.adjustment) if row.adjustment != 0 else "—" }}
+        </td>
+        <td class="text-end fw-600" style="color:#842029;border-right:2px solid #dee2e6;">
+          {{ "{:,.0f}".format(row.total_out) }}
+        </td>
+        <td class="text-end" style="padding:4px 6px;">
+          {% if session.role in ('admin','ops_planner','ops_manager') %}
+          <input type="number" step="1"
+                 class="form-control form-control-sm text-end forecast-input"
+                 style="width:80px;font-size:12px;display:inline-block;border-color:#A78BFA;"
+                 data-item="{{ row.item_id }}"
+                 value="{{ "{:.0f}".format(row.manual_adj) if row.manual_adj != 0 else '' }}"
+                 placeholder="0"
+                 oninput="updateRow(this)">
+          {% else %}
+          <span style="color:#555;">{{ "{:+,.0f}".format(row.manual_adj) if row.manual_adj != 0 else "—" }}</span>
+          {% endif %}
+        </td>
+        <td class="text-end" style="color:#1a7a4a;font-weight:600;">
+          {% if row.inbound_app > 0 %}+{{ "{:,.0f}".format(row.inbound_app) }}{% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+        <td class="text-end" style="color:#374151;">
+          {% if row.inbound_pen > 0 %}<span style="color:#555;">(+{{ "{:,.0f}".format(row.inbound_pen) }})</span>{% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+        <td class="text-end fw-600" style="color:{% if row.final_impact >= 0 %}#1a7a4a{% else %}#842029{% endif %};border-left:2px solid #dee2e6;">
+          {{ "{:+,.0f}".format(row.final_impact) }}
+        </td>
+        <td class="text-end fw-700"
+            data-item="{{ row.item_id }}"
+            data-opening="{{ row.opening }}"
+            data-total-out="{{ row.total_out }}"
+            data-inbound-app="{{ row.inbound_app }}"
+            data-inbound-pen="{{ row.inbound_pen }}"
+            id="final-{{ row.item_id | replace('-','_') | replace(' ','_') }}"
+            style="font-size:13px;{% if is_negative %}color:#dc3545;{% else %}color:#1a7a4a;{% endif %}">
+          {{ "{:,.0f}".format(row.final_balance) }}
+          {% if is_negative %}
+          <i class="bi bi-exclamation-triangle-fill ms-1" style="color:#dc3545;font-size:11px;" title="Potential stockout"></i>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">No active SKUs found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Disclaimer -->
+<div class="mt-3 p-2 rounded" style="background:#F8F9FA;border-left:3px solid #BDD7EE;font-size:11px;color:#555;">
+  <i class="bi bi-info-circle me-1"></i>
+  <strong>Note:</strong> This is an estimate only. Opening balances pull from the last MEC close. Prior month outbound pulls from uploaded sales. Forecast adjustments are manually saved and persist per period.
+  Unapproved inbound POs are shown in brackets and are not counted in the final balance — they are indicative only.
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PERIOD = "{{ period }}";
+
+function getInputVal(el) {
+  return parseFloat(el.value) || 0;
+}
+
+function updateRow(inputEl) {
+  const itemId = inputEl.dataset.item;
+  const safeId = itemId.replace(/-/g,'_').replace(/ /g,'_');
+  const finalCell = document.getElementById('final-' + safeId);
+  if (!finalCell) return;
+
+  const opening   = parseFloat(finalCell.dataset.opening) || 0;
+  const totalOut  = parseFloat(finalCell.dataset.totalOut) || 0;
+  const inboundApp= parseFloat(finalCell.dataset.inboundApp) || 0;
+  const inboundPen= parseFloat(finalCell.dataset.inboundPen) || 0;
+  const manualAdj = getInputVal(inputEl);
+
+  const finalBalance = opening + inboundApp + inboundPen - totalOut - manualAdj;
+  finalCell.textContent = finalBalance.toLocaleString('en-US', {maximumFractionDigits:0, minimumFractionDigits:0});
+  if (finalBalance < 0) {
+    finalCell.style.color = '#dc3545';
+    finalCell.innerHTML = finalBalance.toLocaleString('en-US', {maximumFractionDigits:0}) +
+      ' <i class="bi bi-exclamation-triangle-fill ms-1" style="color:#dc3545;font-size:11px;"></i>';
+    finalCell.closest('tr').style.background = '#FEF2F2';
+  } else {
+    finalCell.style.color = '#1a7a4a';
+    finalCell.closest('tr').style.background = '';
+  }
+}
+
+function saveForecasts() {
+  const inputs = document.querySelectorAll('.forecast-input');
+  const adjustments = {};
+  inputs.forEach(inp => {
+    const val = parseFloat(inp.value) || 0;
+    adjustments[inp.dataset.item] = val;
+  });
+
+  const btn  = document.getElementById('saveBtn');
+  const msg  = document.getElementById('saveMsg');
+  btn.disabled = true;
+  msg.textContent = 'Saving…';
+
+  fetch('/runout-estimator/save-forecast', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({period: PERIOD, adjustments: adjustments})
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    if (data.ok) {
+      msg.style.color = '#1a7a4a';
+      msg.textContent = '✓ Forecast adjustments saved (' + data.saved + ' items).';
+      setTimeout(() => msg.textContent = '', 4000);
+    } else {
+      msg.style.color = '#842029';
+      msg.textContent = 'Error: ' + (data.error || 'Unknown');
+    }
+  })
+  .catch(() => {
+    btn.disabled = false;
+    msg.style.color = '#842029';
+    msg.textContent = 'Network error.';
+  });
+}
+</script>
+{% endblock %}

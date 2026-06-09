@@ -1,0 +1,617 @@
+{% extends "base.html" %}
+{% block title %}Lazada Sales Report{% endblock %}
+{% block page_title %}
+  <i class="bi bi-bar-chart-line me-2" style="color:#2E75B6"></i>Lazada Sales Report
+  {% if period and platform %}
+    <small class="ms-2 text-muted" style="font-size:13px;font-weight:400;">{{ platform }} — {{ period }}</small>
+  {% endif %}
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('sales_upload') }}" class="btn btn-sm btn-primary"><i class="bi bi-upload me-1"></i>Upload Files</a>
+  <a href="{{ url_for('sales_list') }}"   class="btn btn-sm btn-outline-secondary ms-1"><i class="bi bi-list-ul me-1"></i>All Uploads</a>
+{% endblock %}
+
+{% block content %}
+
+{# ─── Filter Bar ──────────────────────────────────────────────────────────── #}
+<div class="form-card mb-4">
+  <form method="GET" action="{{ url_for('sales_report') }}" class="row g-3 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label fw-600 mb-1" style="font-size:12px;">
+        <i class="bi bi-calendar3 me-1" style="color:#1F4E79;"></i>Accounting Month
+      </label>
+      <input type="month" name="period" class="form-control" value="{{ period }}" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label fw-600 mb-1" style="font-size:12px;">
+        <i class="bi bi-shop me-1" style="color:#1F4E79;"></i>Platform
+      </label>
+      <select name="platform" class="form-select" required>
+        <option value="" disabled {% if not platform %}selected{% endif %}>— Select platform —</option>
+        {% for p in lazada_platforms %}
+          <option value="{{ p }}" {% if p == platform %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary w-100">
+        <i class="bi bi-search me-1"></i>View Report
+      </button>
+    </div>
+
+    {# Quick-jump to recent uploads #}
+    {% if combos %}
+    <div class="col-md-3">
+      <label class="form-label fw-600 mb-1" style="font-size:12px;color:#888;">Quick Jump</label>
+      <select class="form-select form-select-sm" onchange="quickJump(this)" style="font-size:12px;">
+        <option value="">— recent uploads —</option>
+        {% for c in combos %}
+          <option value="{{ c.period }}|{{ c.platform }}"
+            {% if c.period == period and c.platform == platform %}selected{% endif %}>
+            {{ c.period }} · {{ c.platform }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+  </form>
+</div>
+
+{% if period and platform %}
+
+{# ─── Upload Status Tiles ─────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="form-card py-3 px-4 d-flex align-items-center gap-3"
+         style="border-left:4px solid {% if income_summary %}#1F4E79{% else %}#dee2e6{% endif %};">
+      <div>
+        {% if income_summary %}
+          <i class="bi bi-check-circle-fill" style="font-size:24px;color:#1F4E79;"></i>
+        {% else %}
+          <i class="bi bi-dash-circle" style="font-size:24px;color:#bbb;"></i>
+        {% endif %}
+      </div>
+      <div>
+        <div class="fw-700" style="font-size:13px;color:{% if income_summary %}#1F4E79{% else %}#999{% endif %};">
+          Income Details File
+        </div>
+        {% if income_summary %}
+          <div style="font-size:11px;color:#555;">
+            {{ income_summary.upload.filename }}
+            &nbsp;·&nbsp; {{ "{:,}".format(income_summary.upload.total_rows or 0) }} lines
+            &nbsp;·&nbsp;
+            <a href="{{ url_for('sales_detail', upload_id=income_summary.upload.id) }}" class="text-decoration-none" style="color:#1F4E79;">
+              {{ income_summary.upload.upload_ref }}
+            </a>
+          </div>
+        {% else %}
+          <div style="font-size:11px;color:#999;">Not uploaded for this period.
+            <a href="{{ url_for('sales_upload') }}" style="color:#1F4E79;">Upload now</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="form-card py-3 px-4 d-flex align-items-center gap-3"
+         style="border-left:4px solid {% if wallet_summary %}#375623{% else %}#dee2e6{% endif %};">
+      <div>
+        {% if wallet_summary %}
+          <i class="bi bi-check-circle-fill" style="font-size:24px;color:#375623;"></i>
+        {% else %}
+          <i class="bi bi-dash-circle" style="font-size:24px;color:#bbb;"></i>
+        {% endif %}
+      </div>
+      <div>
+        <div class="fw-700" style="font-size:13px;color:{% if wallet_summary %}#375623{% else %}#999{% endif %};">
+          Wallet File
+        </div>
+        {% if wallet_summary %}
+          <div style="font-size:11px;color:#555;">
+            {{ wallet_summary.upload.filename }}
+            &nbsp;·&nbsp; {{ "{:,}".format(wallet_summary.upload.total_rows or 0) }} movements
+            &nbsp;·&nbsp;
+            <a href="{{ url_for('sales_detail', upload_id=wallet_summary.upload.id) }}" class="text-decoration-none" style="color:#375623;">
+              {{ wallet_summary.upload.upload_ref }}
+            </a>
+          </div>
+        {% else %}
+          <div style="font-size:11px;color:#999;">Not uploaded for this period.
+            <a href="{{ url_for('sales_upload') }}" style="color:#375623;">Upload now</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if income_summary or wallet_summary %}
+
+{# ─── Combined Top-Level KPIs ─────────────────────────────────────────────── #}
+{% if income_summary and wallet_summary %}
+<div class="d-flex align-items-center mb-2">
+  <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">Combined Summary</span>
+  <hr class="flex-grow-1 ms-2 me-0" style="border-color:#e5e5e5;">
+</div>
+<div class="row g-3 mb-4">
+  {% set inc = income_summary.cat_totals %}
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Revenue (incl GST)</div>
+      <div class="kpi-value" style="font-size:17px;color:#1F4E79;">${{ "{:,.2f}".format(inc.Revenue.amount_incl) }}</div>
+      <div style="font-size:10px;color:#888;">ex-GST ${{ "{:,.2f}".format(inc.Revenue.amount_ex_gst) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Output GST</div>
+      <div class="kpi-value" style="font-size:17px;color:#1F4E79;">${{ "{:,.2f}".format(inc.Revenue.gst_amount) }}</div>
+      <div style="font-size:10px;color:#888;">on revenue (9/109)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Platform Fees</div>
+      <div class="kpi-value" style="font-size:17px;color:#842029;">${{ "{:,.2f}".format(inc['Platform Fee'].amount_incl | abs) }}</div>
+      <div style="font-size:10px;color:#888;">Input GST ${{ "{:,.2f}".format(inc['Platform Fee'].gst_amount | abs) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Seller Discounts</div>
+      <div class="kpi-value" style="font-size:17px;color:#856404;">${{ "{:,.2f}".format(inc['Seller Discount'].amount_incl | abs) }}</div>
+      <div style="font-size:10px;color:#888;">No GST</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Cash to Bank</div>
+      <div class="kpi-value" style="font-size:17px;color:#375623;">${{ "{:,.2f}".format(wallet_summary.withdrawal_total | abs) }}</div>
+      <div style="font-size:10px;color:#888;">Auto Withdrawal</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center {% if income_summary.deferred_lines %}border-warning{% endif %}">
+      <div class="kpi-label">AR (Released)</div>
+      <div class="kpi-value" style="font-size:17px;color:{% if income_summary.deferred_lines %}#856404{% else %}#375623{% endif %};">
+        ${{ "{:,.2f}".format(income_summary.ar_released) }}
+      </div>
+      {% if income_summary.deferred_lines %}
+      <div style="font-size:10px;color:#856404;">⚠ ${{ "{:,.2f}".format(income_summary.deferred_net | abs) }} deferred</div>
+      {% else %}
+      <div style="font-size:10px;color:#888;">Net wallet settlement</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   INCOME DETAILS SECTION
+   ════════════════════════════════════════════════════════════════════════════ #}
+{% if income_summary %}
+{% set s = income_summary %}
+{% set ct = s.cat_totals %}
+
+<div class="d-flex align-items-center mb-2 mt-2">
+  <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">Income Details</span>
+  <hr class="flex-grow-1 ms-2 me-0" style="border-color:#e5e5e5;">
+  <span style="background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 10px;font-size:11px;font-weight:700;margin-left:10px;">
+    <i class="bi bi-receipt-cutoff me-1"></i>{{ s.upload.upload_ref }}
+  </span>
+</div>
+
+{# Income KPIs #}
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Revenue (incl GST)</div>
+      <div class="kpi-value" style="font-size:16px;color:#1F4E79;">${{ "{:,.2f}".format(ct.Revenue.amount_incl) }}</div>
+      <div style="font-size:10px;color:#888;">ex-GST ${{ "{:,.2f}".format(ct.Revenue.amount_ex_gst) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Output GST</div>
+      <div class="kpi-value" style="font-size:16px;color:#1F4E79;">${{ "{:,.2f}".format(ct.Revenue.gst_amount) }}</div>
+      <div style="font-size:10px;color:#888;">9/109 of revenue</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Platform Fees (incl GST)</div>
+      <div class="kpi-value" style="font-size:16px;color:#842029;">${{ "{:,.2f}".format(ct['Platform Fee'].amount_incl | abs) }}</div>
+      <div style="font-size:10px;color:#888;">Input GST ${{ "{:,.2f}".format(ct['Platform Fee'].gst_amount | abs) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Seller Discounts</div>
+      <div class="kpi-value" style="font-size:16px;color:#856404;">${{ "{:,.2f}".format(ct['Seller Discount'].amount_incl | abs) }}</div>
+      <div style="font-size:10px;color:#888;">No GST</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Net Shipping</div>
+      <div class="kpi-value" style="font-size:16px;color:{% if ct.Shipping.amount_incl >= 0 %}#375623{% else %}#842029{% endif %};">
+        ${{ "{:,.2f}".format(ct.Shipping.amount_incl | abs) }}
+      </div>
+      <div style="font-size:10px;color:#888;">Input GST ${{ "{:,.2f}".format(ct.Shipping.gst_amount | abs) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="kpi-card text-center {% if s.deferred_lines %}border-warning{% endif %}">
+      <div class="kpi-label">AR – Released</div>
+      <div class="kpi-value" style="font-size:16px;color:#375623;">${{ "{:,.2f}".format(s.ar_released) }}</div>
+      {% if s.deferred_lines %}
+      <div style="font-size:10px;color:#856404;">⚠ ${{ "{:,.2f}".format(s.deferred_net | abs) }} deferred</div>
+      {% else %}
+      <div style="font-size:10px;color:#888;">Net wallet settlement</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# Journal Entries + Fee Breakdown #}
+<div class="row g-3 mb-3">
+  <div class="col-md-5">
+    <div class="form-card h-100">
+      <div class="form-section-title" style="font-size:12px;">
+        <i class="bi bi-journal-check me-2" style="color:#1F4E79;"></i>Journal Entries
+      </div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead><tr style="background:#f0f4f8;">
+          <th style="width:42px;">DR/CR</th><th>Account</th><th class="text-end">Amount</th>
+        </tr></thead>
+        <tbody>
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Revenue</td></tr>
+          <tr>
+            <td><span class="badge" style="background:#d1ecf1;color:#0c5460;font-size:9px;">CR</span></td>
+            <td>Revenue – Sales (ex-GST)</td>
+            <td class="text-end fw-600" style="color:#1F4E79;">${{ "{:,.2f}".format(ct.Revenue.amount_ex_gst) }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge" style="background:#d1ecf1;color:#0c5460;font-size:9px;">CR</span></td>
+            <td>GST Output Tax</td>
+            <td class="text-end text-muted">${{ "{:,.2f}".format(ct.Revenue.gst_amount) }}</td>
+          </tr>
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Platform Fees</td></tr>
+          {% for fee_name, fd in s.fee_data.items() if fd.category == 'Platform Fee' %}
+          <tr>
+            <td><span class="badge" style="background:#fce4e4;color:#842029;font-size:9px;">DR</span></td>
+            <td style="font-size:11px;">{{ fee_name }} <span class="text-muted">(ex-GST)</span></td>
+            <td class="text-end" style="color:#842029;">${{ "{:,.2f}".format(fd.amount_ex_gst | abs) }}</td>
+          </tr>
+          {% endfor %}
+          <tr>
+            <td><span class="badge" style="background:#fce4e4;color:#842029;font-size:9px;">DR</span></td>
+            <td>GST Input Tax (Platform Fees)</td>
+            <td class="text-end" style="color:#842029;">${{ "{:,.2f}".format(ct['Platform Fee'].gst_amount | abs) }}</td>
+          </tr>
+          {% if ct['Seller Discount'].amount_incl != 0 %}
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Seller Discounts</td></tr>
+          {% for fee_name, fd in s.fee_data.items() if fd.category == 'Seller Discount' %}
+          <tr>
+            <td><span class="badge" style="background:#fff3cd;color:#856404;font-size:9px;">DR</span></td>
+            <td style="font-size:11px;">{{ fee_name }}</td>
+            <td class="text-end" style="color:#856404;">${{ "{:,.2f}".format(fd.amount_incl | abs) }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">AR Settlement</td></tr>
+          <tr>
+            <td><span class="badge" style="background:#fce4e4;color:#842029;font-size:9px;">DR</span></td>
+            <td>AR – Lazada (current period)</td>
+            <td class="text-end fw-700" style="color:#1F4E79;">${{ "{:,.2f}".format(s.ar_released) }}</td>
+          </tr>
+          {% if s.deferred_lines %}
+          <tr>
+            <td><span class="badge" style="background:#fff3cd;color:#856404;font-size:9px;">CR</span></td>
+            <td>AR – Lazada (deferred — next period)</td>
+            <td class="text-end fw-700" style="color:#856404;">${{ "{:,.2f}".format(s.deferred_net | abs) }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="form-card h-100">
+      <div class="form-section-title" style="font-size:12px;">
+        <i class="bi bi-table me-2" style="color:#1F4E79;"></i>Fee Name Breakdown
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:11px;">
+          <thead><tr style="background:#f0f4f8;">
+            <th>Category</th><th>Fee Name</th><th class="text-end">Rows</th>
+            <th class="text-end">Incl GST</th><th class="text-end">Ex-GST</th><th class="text-end">GST</th>
+          </tr></thead>
+          <tbody>
+            {% set cat_colours = {'Revenue':'#DEEAF1','Platform Fee':'#fce4e4','Seller Discount':'#fff3cd','Shipping':'#e8f5e9','Other':'#f0f4f8'} %}
+            {% for fee_name, fd in s.fee_data.items() %}
+            <tr>
+              <td><span style="background:{{ cat_colours.get(fd.category,'#f0f4f8') }};border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">{{ fd.category }}</span></td>
+              <td>{{ fee_name }}</td>
+              <td class="text-end text-muted">{{ fd.row_count }}</td>
+              <td class="text-end {% if fd.amount_incl < 0 %}text-danger{% elif fd.amount_incl > 0 %}text-success{% endif %}">${{ "{:,.2f}".format(fd.amount_incl) }}</td>
+              <td class="text-end {% if fd.amount_ex_gst < 0 %}text-danger{% elif fd.amount_ex_gst > 0 %}text-success{% endif %}">${{ "{:,.2f}".format(fd.amount_ex_gst) }}</td>
+              <td class="text-end text-muted">{% if fd.gst_amount != 0 %}${{ "{:,.2f}".format(fd.gst_amount | abs) }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot style="background:#f8f9fa;">
+            <tr class="fw-700">
+              <td colspan="2">Total</td>
+              <td class="text-end">{{ s.fee_data.values() | map(attribute='row_count') | sum }}</td>
+              <td class="text-end">${{ "{:,.2f}".format(s.ar_released) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# SKU Revenue Breakdown #}
+{% if s.sku_data %}
+<div class="form-card mb-3">
+  <div class="form-section-title" style="font-size:12px;">
+    <i class="bi bi-box-seam me-2" style="color:#1F4E79;"></i>SKU Revenue Breakdown (Item Price Credit)
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0" style="font-size:12px;">
+      <thead><tr style="background:#f0f4f8;">
+        <th>Seller SKU</th><th class="text-end">Orders</th>
+        <th class="text-end">Revenue (incl GST)</th><th class="text-end">Revenue (ex-GST)</th><th class="text-end">Output GST</th>
+        {% if s.sku_costs %}<th class="text-end">Unit FIFO Cost</th><th class="text-end">Est. COGS</th>{% endif %}
+      </tr></thead>
+      <tbody>
+        {% for sku_id, sd in s.sku_data | dictsort %}
+        <tr>
+          <td><code style="font-size:11px;">{{ sku_id }}</code></td>
+          <td class="text-end">{{ sd.row_count }}</td>
+          <td class="text-end">${{ "{:,.2f}".format(sd.amount_incl) }}</td>
+          <td class="text-end" style="color:#1F4E79;">${{ "{:,.2f}".format(sd.amount_ex_gst) }}</td>
+          <td class="text-end text-muted">${{ "{:,.2f}".format(sd.gst_amount) }}</td>
+          {% if s.sku_costs %}
+          {% set unit_cost = s.sku_costs.get(sku_id, 0) %}
+          <td class="text-end {% if unit_cost == 0 %}text-muted{% endif %}">{% if unit_cost > 0 %}${{ "{:,.4f}".format(unit_cost) }}{% else %}—{% endif %}</td>
+          <td class="text-end {% if unit_cost == 0 %}text-muted{% endif %}">{% if unit_cost > 0 %}<span style="color:#856404;">${{ "{:,.2f}".format(sd.row_count * unit_cost) }}</span>{% else %}—{% endif %}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# Deferred Lines #}
+{% if s.deferred_lines %}
+<div class="alert mb-3 py-2" style="background:#fff9e6;border:1px solid #ffc107;font-size:12px;">
+  <i class="bi bi-clock me-1" style="color:#856404;"></i>
+  <strong style="color:#856404;">{{ s.deferred_lines | length }} deferred line(s) — net ${{ "{:,.2f}".format(s.deferred_net) }}.</strong>
+  These have a Release Date outside the current period. Credit AR – Lazada (Deferred) instead of current-period AR. Reverse in the following period.
+</div>
+{% endif %}
+{% endif %}{# end income_summary #}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   WALLET SECTION
+   ════════════════════════════════════════════════════════════════════════════ #}
+{% if wallet_summary %}
+{% set w = wallet_summary %}
+
+<div class="d-flex align-items-center mb-2 mt-3">
+  <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">Wallet</span>
+  <hr class="flex-grow-1 ms-2 me-0" style="border-color:#e5e5e5;">
+  <span style="background:#E2EFDA;color:#375623;border-radius:4px;padding:2px 10px;font-size:11px;font-weight:700;margin-left:10px;">
+    <i class="bi bi-wallet2 me-1"></i>{{ w.upload.upload_ref }}
+  </span>
+</div>
+
+{# Wallet KPIs #}
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Total Settlements</div>
+      <div class="kpi-value" style="font-size:17px;color:#375623;">${{ "{:,.2f}".format(w.settlement_total) }}</div>
+      <div style="font-size:10px;color:#888;">{{ w.sub_totals.get('Settlement', {}).get('count', 0) }} daily settlements</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Current Period AR</div>
+      <div class="kpi-value" style="font-size:17px;color:#1F4E79;">${{ "{:,.2f}".format(w.current_ar_total) }}</div>
+      <div style="font-size:10px;color:#888;">Excl prior-month stmts</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card text-center">
+      <div class="kpi-label">Auto Withdrawal</div>
+      <div class="kpi-value" style="font-size:17px;color:#842029;">${{ "{:,.2f}".format(w.withdrawal_total | abs) }}</div>
+      <div style="font-size:10px;color:#888;">{{ w.sub_totals.get('Auto Withdrawal', {}).get('count', 0) }} transfer(s)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-card text-center {% if w.topup_total != 0 %}border-warning{% endif %}">
+      <div class="kpi-label">Sponsored Solutions</div>
+      <div class="kpi-value" style="font-size:17px;color:#856404;">${{ "{:,.2f}".format(w.topup_total | abs) }}</div>
+      <div style="font-size:10px;color:#888;">{{ w.sub_totals.get('Sponsored Solutions Top-up', {}).get('count', 0) }} top-up(s)</div>
+    </div>
+  </div>
+</div>
+
+{# Journal Entries + Wallet Log #}
+<div class="row g-3 mb-3">
+  <div class="col-md-5">
+    <div class="form-card h-100">
+      <div class="form-section-title" style="font-size:12px;">
+        <i class="bi bi-journal-check me-2" style="color:#375623;"></i>Journal Entries
+      </div>
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead><tr style="background:#f0f4f8;">
+          <th style="width:42px;">DR/CR</th><th>Account</th><th class="text-end">Amount</th>
+        </tr></thead>
+        <tbody>
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Settlements (clearing AR)</td></tr>
+          {% if w.current_ar_total != 0 %}
+          <tr>
+            <td><span class="badge" style="background:#fce4e4;color:#842029;font-size:9px;">DR</span></td>
+            <td>Lazada Wallet</td>
+            <td class="text-end fw-600" style="color:#375623;">${{ "{:,.2f}".format(w.current_ar_total) }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge" style="background:#d1ecf1;color:#0c5460;font-size:9px;">CR</span></td>
+            <td>AR – Lazada (current period)</td>
+            <td class="text-end fw-600" style="color:#1F4E79;">${{ "{:,.2f}".format(w.current_ar_total) }}</td>
+          </tr>
+          {% endif %}
+          {% if w.prior_lines %}
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Prior Month AR Settlement ⚠</td></tr>
+          {% for line in w.prior_lines %}
+          <tr>
+            <td><span class="badge" style="background:#fce4e4;color:#842029;font-size:9px;">DR</span></td>
+            <td style="font-size:11px;">Lazada Wallet<br><span class="text-muted">{{ line.brand or '' }}</span></td>
+            <td class="text-end fw-600" style="color:#375623;">${{ "{:,.2f}".format(line.tx_amount or 0) }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge" style="background:#d1ecf1;color:#0c5460;font-size:9px;">CR</span></td>
+            <td style="font-size:11px;">AR – Lazada (prior period)</td>
+            <td class="text-end fw-600" style="color:#856404;">${{ "{:,.2f}".format(line.tx_amount or 0) }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+          {% if w.withdrawal_total != 0 %}
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Bank Transfer</td></tr>
+          <tr>
+            <td><span class="badge" style="background:#fce4e4;color:#842029;font-size:9px;">DR</span></td>
+            <td>Bank Account</td>
+            <td class="text-end fw-600" style="color:#375623;">${{ "{:,.2f}".format(w.withdrawal_total | abs) }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge" style="background:#d1ecf1;color:#0c5460;font-size:9px;">CR</span></td>
+            <td>Lazada Wallet</td>
+            <td class="text-end fw-600" style="color:#842029;">${{ "{:,.2f}".format(w.withdrawal_total | abs) }}</td>
+          </tr>
+          {% endif %}
+          {% if w.topup_total != 0 %}
+          <tr class="table-light"><td colspan="3" style="font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;text-transform:uppercase;">Sponsored Solutions</td></tr>
+          <tr>
+            <td><span class="badge" style="background:#fff3cd;color:#856404;font-size:9px;">DR</span></td>
+            <td>Advertising – Sponsored Solutions</td>
+            <td class="text-end fw-600" style="color:#856404;">${{ "{:,.2f}".format(w.topup_total | abs) }}</td>
+          </tr>
+          <tr>
+            <td><span class="badge" style="background:#d1ecf1;color:#0c5460;font-size:9px;">CR</span></td>
+            <td>Lazada Wallet</td>
+            <td class="text-end fw-600" style="color:#842029;">${{ "{:,.2f}".format(w.topup_total | abs) }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="form-card h-100">
+      <div class="form-section-title" style="font-size:12px;">
+        <i class="bi bi-list-ul me-2" style="color:#375623;"></i>Wallet Movement Log
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size:11px;">
+          <thead><tr style="background:#f0f4f8;">
+            <th>Date / Time</th><th>Sub Type</th><th>Remarks</th>
+            <th class="text-end">Amount</th><th></th>
+          </tr></thead>
+          <tbody>
+            {% for line in w.all_lines %}
+            <tr>
+              <td style="white-space:nowrap;">{{ line.payout_date or '—' }}</td>
+              <td>
+                {% if (line.product_name or '') == 'Settlement' %}
+                  <span style="background:#E2EFDA;color:#375623;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">Settlement</span>
+                {% elif (line.product_name or '') == 'Auto Withdrawal' %}
+                  <span style="background:#fce4e4;color:#842029;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">Auto Withdrawal</span>
+                {% elif (line.product_name or '') == 'Sponsored Solutions Top-up' %}
+                  <span style="background:#fff3cd;color:#856404;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">Sponsored Solutions</span>
+                {% else %}
+                  {{ line.product_name or '—' }}
+                {% endif %}
+              </td>
+              <td style="font-size:10px;color:#666;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ line.brand or '' }}">{{ line.brand or '—' }}</td>
+              <td class="text-end fw-600 {% if (line.tx_amount or 0) < 0 %}text-danger{% else %}text-success{% endif %}">
+                ${{ "{:,.2f}".format(line.tx_amount or 0) }}
+              </td>
+              <td>
+                {% if line.is_flagged %}
+                <span title="{{ line.flag_reason }}" style="cursor:help;color:#ffc107;"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot style="background:#f8f9fa;">
+            <tr class="fw-700">
+              <td colspan="3">Net wallet movement</td>
+              <td class="text-end">${{ "{:,.2f}".format(w.all_lines | map(attribute='tx_amount') | select | sum) }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if w.prior_lines %}
+<div class="alert mb-3 py-2" style="background:#fff9e6;border:1px solid #ffc107;font-size:12px;">
+  <i class="bi bi-clock-history me-1" style="color:#856404;"></i>
+  <strong style="color:#856404;">Prior-month settlement(s) detected.</strong>
+  {{ w.prior_lines | length }} settlement(s) totalling <strong>${{ "{:,.2f}".format(w.prior_total) }}</strong>
+  originate from a previous month's statement — knock these off against the AR – Lazada balance carried forward.
+</div>
+{% endif %}
+
+{% endif %}{# end wallet_summary #}
+
+{% else %}
+{# Neither file uploaded yet #}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-cloud-upload" style="font-size:3rem;color:#BDD7EE;"></i>
+  <p class="mt-3 fw-600" style="color:#555;">No data uploaded for {{ platform }} – {{ period }}</p>
+  <a href="{{ url_for('sales_upload') }}" class="btn btn-primary mt-1">
+    <i class="bi bi-upload me-1"></i>Upload Files Now
+  </a>
+</div>
+{% endif %}
+
+{% else %}
+{# No period/platform selected yet #}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-bar-chart-line" style="font-size:3rem;color:#BDD7EE;"></i>
+  <p class="mt-3">Select a month and platform above to generate the report.</p>
+  {% if combos %}
+  <p style="font-size:13px;">Or use the <strong>Quick Jump</strong> dropdown to view a recent upload.</p>
+  {% else %}
+  <p style="font-size:13px;">No Lazada data uploaded yet.
+    <a href="{{ url_for('sales_upload') }}" class="text-decoration-none" style="color:#1F4E79;">Upload your first file</a>
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function quickJump(sel) {
+  var val = sel.value;
+  if (!val) return;
+  var parts = val.split("|");
+  if (parts.length !== 2) return;
+  window.location.href = "{{ url_for('sales_report') }}?period=" + encodeURIComponent(parts[0]) + "&platform=" + encodeURIComponent(parts[1]);
+}
+</script>
+{% endblock %}

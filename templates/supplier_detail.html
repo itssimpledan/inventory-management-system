@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+{% block title %}{{ supplier.name }}{% endblock %}
+{% block page_title %}
+  <i class="bi bi-building me-2" style="color:#2E75B6"></i>{{ supplier.name }}
+  <span class="ms-2 badge-status {% if supplier.status == "Active" %}s-received{% else %}s-cancelled{% endif %}"
+    style="font-size:13px;">{{ supplier.status }}</span>
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('supplier_list') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>All Suppliers
+  </a>
+  {% if can_request %}
+  <a href="{{ url_for('supplier_request_new') }}?type=Edit&supplier_id={{ supplier.supplier_id }}"
+     class="btn btn-sm btn-outline-primary ms-1">
+    <i class="bi bi-pencil me-1"></i>Edit Request
+  </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- LEFT: Supplier info + SKUs -->
+  <div class="col-lg-8">
+
+    <!-- Supplier info -->
+    <div class="form-card mb-4">
+      <div class="form-section-title"><i class="bi bi-info-circle me-1"></i>Supplier Information</div>
+      <div class="row g-3" style="font-size:13px;">
+        <div class="col-md-3">
+          <div class="text-muted" style="font-size:11px;">Supplier ID</div>
+          <div class="fw-700" style="color:#2E75B6;font-size:15px;">{{ supplier.supplier_id }}</div>
+        </div>
+        <div class="col-md-5">
+          <div class="text-muted" style="font-size:11px;">Company Name</div>
+          <div class="fw-600">{{ supplier.name }}</div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted" style="font-size:11px;">Currency</div>
+          <div class="fw-600">{{ supplier.currency or "USD" }}</div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted" style="font-size:11px;">Contact</div>
+          <div>{{ supplier.contact_name or "—" }}</div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted" style="font-size:11px;">Email</div>
+          <div><a href="mailto:{{ supplier.email }}" style="color:#2E75B6;">{{ supplier.email or "—" }}</a></div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted" style="font-size:11px;">Phone</div>
+          <div>{{ supplier.phone or "—" }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted" style="font-size:11px;">Payment Terms</div>
+          <div>{{ supplier.payment_terms or "—" }}</div>
+        </div>
+        <div class="col-md-2">
+          <div class="text-muted" style="font-size:11px;">Lead Days</div>
+          <div>{{ supplier.lead_days or "—" }}</div>
+        </div>
+        <div class="col-md-7">
+          <div class="text-muted" style="font-size:11px;">Bank</div>
+          <div>{{ supplier.bank_name or "—" }}{% if supplier.bank_account %} — {{ supplier.bank_account }}{% endif %}{% if supplier.swift_code %} ({{ supplier.swift_code }}){% endif %}</div>
+        </div>
+        {% if supplier.notes %}
+        <div class="col-12">
+          <div class="text-muted" style="font-size:11px;">Notes</div>
+          <div>{{ supplier.notes }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- SKUs / Items linked to this supplier -->
+    <div class="ims-table">
+      <div class="p-3 d-flex justify-content-between align-items-center"
+           style="background:#fff;border-bottom:1px solid #eee;">
+        <span style="font-weight:700;color:#1F4E79;font-size:14px;">
+          <i class="bi bi-boxes me-1"></i>
+          Items / SKUs
+          <span class="ms-2 text-muted fw-400" style="font-size:12px;">{{ linked_items|length }}</span>
+        </span>
+        {% if can_manage_items %}
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addSkuModal">
+            <i class="bi bi-plus-circle me-1"></i>Add New SKU
+          </button>
+          {% if available_items %}
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#linkSkuModal">
+            <i class="bi bi-link-45deg me-1"></i>Link Existing
+          </button>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <table class="table table-hover mb-0 sortable">
+        <thead>
+          <tr>
+            <th>Item ID</th><th>Name</th><th>Description</th>
+            <th>Category</th><th>UOM</th><th>Unit Price</th><th>Reorder Pt.</th><th>Status</th>
+            {% if can_manage_items %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in linked_items %}
+          <tr>
+            <td class="fw-600" style="color:#2E75B6;">{{ item.item_id }}</td>
+            <td class="fw-600">{{ item.name }}</td>
+            <td style="color:#555;font-size:12px;">{{ item.description or "—" }}</td>
+            <td>
+              {% if item.category %}
+              <span class="badge-status s-approved">{{ item.category }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ item.unit_of_measure }}</td>
+            <td>{{ item.unit_price | currency }}</td>
+            <td>{{ item.reorder_point }}</td>
+            <td>
+              {% if item.status == "Active" %}
+              <span class="badge-status s-received" style="font-size:10px;"><i class="bi bi-check-circle me-1"></i>Active</span>
+              {% else %}
+              <span class="badge-status s-cancelled" style="font-size:10px;"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+              {% endif %}
+            </td>
+            {% if can_manage_items %}
+            <td>
+              <button class="btn btn-sm btn-outline-secondary py-0 px-2 me-1"
+                data-bs-toggle="modal" data-bs-target="#editSkuModal"
+                data-id="{{ item.item_id }}"
+                data-name="{{ item.name }}"
+                data-description="{{ item.description or '' }}"
+                data-category="{{ item.category or '' }}"
+                data-uom="{{ item.unit_of_measure }}"
+                data-reorder="{{ item.reorder_point }}"
+                data-lead="{{ item.lead_days }}"
+                data-price="{{ item.unit_price or 0 }}"
+                data-notes="{{ item.notes or '' }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <form method="POST"
+                action="{{ url_for('item_toggle', item_id=item.item_id) }}"
+                class="d-inline">
+                <input type="hidden" name="redirect_to"
+                  value="{{ url_for('supplier_detail', supplier_id=supplier.supplier_id) }}">
+                <button type="submit"
+                  class="btn btn-sm py-0 px-2 {% if item.status == 'Active' %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                  {% if item.status == "Active" %}
+                  <i class="bi bi-pause-circle"></i>
+                  {% else %}
+                  <i class="bi bi-play-circle"></i>
+                  {% endif %}
+                </button>
+              </form>
+              <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1"
+                data-bs-toggle="modal" data-bs-target="#deleteSkuModal"
+                data-id="{{ item.item_id }}" data-name="{{ item.name }}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+          {% if not linked_items %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-4">
+              <i class="bi bi-boxes me-1"></i>No items linked yet.
+              {% if can_manage_items %}Use <strong>Add New SKU</strong> to create items for this supplier.{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /col-lg-8 -->
+
+  <!-- RIGHT: Recent requests -->
+  <div class="col-lg-4">
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-clock-history me-1"></i>Recent Change Requests</div>
+      {% if requests %}
+      {% for r in requests %}
+      <a href="{{ url_for('supplier_request_detail', req_id=r.id) }}"
+         class="d-block p-2 mb-2 rounded text-decoration-none"
+         style="background:#f8f9fa;border:1px solid #eee;">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="fw-600" style="font-size:12px;color:#2E75B6;">{{ r.request_id }}</span>
+          <span class="badge-status
+            {% if r.status == "Pending" %}s-pending
+            {% elif r.status == "Ops Approved" %}s-ops-approved
+            {% elif r.status == "Approved" %}s-received
+            {% else %}s-cancelled{% endif %}"
+            style="font-size:10px;">{{ r.status }}</span>
+        </div>
+        <div style="font-size:11px;color:#555;">
+          {{ r.request_type }} &middot; {{ r.raised_by }} &middot; {{ r.raised_date | dateformat }}
+        </div>
+      </a>
+      {% endfor %}
+      {% else %}
+      <div class="text-muted" style="font-size:12px;">No change requests yet.</div>
+      {% endif %}
+      {% if can_request %}
+      <hr>
+      <div class="d-grid gap-2">
+        <a href="{{ url_for('supplier_request_new') }}?type=Edit&supplier_id={{ supplier.supplier_id }}"
+           class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-pencil me-1"></i>Raise Edit Request
+        </a>
+        {% if supplier.status == "Active" %}
+        <a href="{{ url_for('supplier_request_new') }}?type=Deactivate&supplier_id={{ supplier.supplier_id }}"
+           class="btn btn-sm btn-outline-danger">
+          <i class="bi bi-slash-circle me-1"></i>Raise Deactivate Request
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div><!-- /row -->
+
+{% if can_manage_items %}
+<!-- ADD NEW SKU MODAL -->
+<div class="modal fade" id="addSkuModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('item_add') }}">
+        <input type="hidden" name="preferred_supplier" value="{{ supplier.supplier_id }}">
+        <input type="hidden" name="redirect_to"
+          value="{{ url_for('supplier_detail', supplier_id=supplier.supplier_id) }}">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white">
+            <i class="bi bi-plus-circle me-2"></i>Add New SKU for {{ supplier.name }}
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-600">Item ID <span class="text-danger">*</span></label>
+              <input type="text" name="item_id" class="form-control" required
+                placeholder="e.g. I006" style="text-transform:uppercase;">
+              <small class="text-muted">Must be unique</small>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-600">Item Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required placeholder="e.g. Widget A">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Unit of Measure</label>
+              <select name="unit_of_measure" class="form-select">
+                {% for u in ["Units","Pcs","Kg","g","L","mL","Box","Carton","Pallet","Set","Pair","Roll","Sheet"] %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Unit Price</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="unit_price" class="form-control" step="0.0001" min="0" value="0">
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-600">Description</label>
+              <input type="text" name="description" class="form-control" placeholder="Short description">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Category</label>
+              <input type="text" name="category" class="form-control"
+                list="cat_opts_sup" placeholder="e.g. Electronics">
+              <datalist id="cat_opts_sup">
+                {% for item in linked_items %}
+                {% if item.category %}
+                <option value="{{ item.category }}">
+                {% endif %}
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Reorder Point</label>
+              <input type="number" name="reorder_point" class="form-control" value="0" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Lead Days</label>
+              <input type="number" name="lead_days" class="form-control"
+                value="{{ supplier.lead_days or 14 }}" min="0">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-600">Notes</label>
+              <input type="text" name="notes" class="form-control" placeholder="Optional notes">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Add SKU
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- LINK EXISTING SKU MODAL -->
+{% if available_items %}
+<div class="modal fade" id="linkSkuModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('supplier_item_add', supplier_id=supplier.supplier_id) }}">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white">
+            <i class="bi bi-link-45deg me-2"></i>Link Existing Item
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted" style="font-size:13px;">Link an item that already exists in the system to this supplier.</p>
+          <div class="mb-3">
+            <label class="form-label fw-600">Item <span class="text-danger">*</span></label>
+            <select name="item_id" class="form-select" required>
+              <option value="">— select item —</option>
+              {% for item in available_items %}
+              <option value="{{ item.item_id }}">
+                {{ item.item_id }} — {{ item.name }}{% if item.category %} ({{ item.category }}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-link-45deg me-1"></i>Link Item
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- EDIT SKU MODAL -->
+<div class="modal fade" id="editSkuModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" id="editSkuForm">
+        <input type="hidden" name="preferred_supplier" value="{{ supplier.supplier_id }}">
+        <input type="hidden" name="redirect_to"
+          value="{{ url_for('supplier_detail', supplier_id=supplier.supplier_id) }}">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white">
+            <i class="bi bi-pencil me-2"></i>Edit SKU — <span id="edit_sku_title"></span>
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-600">Item ID</label>
+              <input type="text" id="esku_id_display" class="form-control" disabled>
+              <small class="text-muted">Item ID cannot be changed</small>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-600">Item Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="esku_name" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Unit Price</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="unit_price" id="esku_price" class="form-control" step="0.0001" min="0">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Unit of Measure</label>
+              <select name="unit_of_measure" id="esku_uom" class="form-select">
+                {% for u in ["Units","Pcs","Kg","g","L","mL","Box","Carton","Pallet","Set","Pair","Roll","Sheet"] %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-600">Description</label>
+              <input type="text" name="description" id="esku_desc" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Category</label>
+              <input type="text" name="category" id="esku_category" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Reorder Point</label>
+              <input type="number" name="reorder_point" id="esku_reorder" class="form-control" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Lead Days</label>
+              <input type="number" name="lead_days" id="esku_lead" class="form-control" min="0">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-600">Notes</label>
+              <input type="text" name="notes" id="esku_notes" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE SKU MODAL -->
+<div class="modal fade" id="deleteSkuModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" id="deleteSkuForm">
+        <input type="hidden" name="redirect_to"
+          value="{{ url_for('supplier_detail', supplier_id=supplier.supplier_id) }}">
+        <div class="modal-header" style="background:#dc3545;">
+          <h5 class="modal-title text-white"><i class="bi bi-trash me-2"></i>Delete SKU</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center py-4">
+          <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:2rem;"></i>
+          <p class="mt-3 mb-1">Delete item</p>
+          <p class="fw-bold" id="del_sku_label"></p>
+          <p class="text-muted" style="font-size:12px;">Items with existing POs or ledger entries cannot be deleted — deactivate instead.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const editSkuModal = document.getElementById("editSkuModal")
+if (editSkuModal) {
+  editSkuModal.addEventListener("show.bs.modal", function(e) {
+    const btn = e.relatedTarget
+    document.getElementById("edit_sku_title").textContent = btn.dataset.id + " — " + btn.dataset.name
+    document.getElementById("editSkuForm").action = "/items/" + btn.dataset.id + "/edit"
+    document.getElementById("esku_id_display").value = btn.dataset.id
+    document.getElementById("esku_name").value     = btn.dataset.name
+    document.getElementById("esku_price").value    = btn.dataset.price
+    document.getElementById("esku_desc").value     = btn.dataset.description
+    document.getElementById("esku_category").value = btn.dataset.category
+    document.getElementById("esku_uom").value      = btn.dataset.uom
+    document.getElementById("esku_reorder").value  = btn.dataset.reorder
+    document.getElementById("esku_lead").value     = btn.dataset.lead
+    document.getElementById("esku_notes").value    = btn.dataset.notes
+  })
+}
+const deleteSkuModal = document.getElementById("deleteSkuModal")
+if (deleteSkuModal) {
+  deleteSkuModal.addEventListener("show.bs.modal", function(e) {
+    const btn = e.relatedTarget
+    document.getElementById("del_sku_label").textContent = btn.dataset.id + " — " + btn.dataset.name
+    document.getElementById("deleteSkuForm").action = "/items/" + btn.dataset.id + "/delete"
+  })
+}
+</script>
+{% endblock %}

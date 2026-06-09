@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Sales Uploads{% endblock %}
+{% block page_title %}<i class="bi bi-graph-up-arrow me-2" style="color:#2E75B6"></i>Sales Uploads{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('sales_upload') }}" class="btn btn-sm btn-primary">
+    <i class="bi bi-upload me-1"></i>Upload Sales File
+  </a>
+  <a href="{{ url_for('export_sales') }}" class="btn btn-sm btn-outline-secondary" title="Export all sales data to CSV"><i class="bi bi-download me-1"></i>CSV</a>
+{% endblock %}
+
+{% block content %}
+{% if uploads %}
+<div class="table-responsive">
+<table class="table ims-table sortable" style="font-size:13px;">
+  <thead><tr>
+    <th>Ref <span class="sort-icon">⇅</span></th>
+    <th>Platform <span class="sort-icon">⇅</span></th>
+    <th>Period <span class="sort-icon">⇅</span></th>
+    <th>Filename <span class="sort-icon">⇅</span></th>
+    <th class="text-end">Rows <span class="sort-icon">⇅</span></th>
+    <th>Uploaded By <span class="sort-icon">⇅</span></th>
+    <th>Date <span class="sort-icon">⇅</span></th>
+    <th>Actions</th>
+  </tr></thead>
+  <tbody>
+    {% for u in uploads %}
+    <tr>
+      <td><a href="{{ url_for('sales_detail', upload_id=u.id) }}" class="fw-600 text-decoration-none" style="color:#1F4E79;">{{ u.upload_ref }}</a></td>
+      <td>{{ u.platform or '—' }}</td>
+      <td>{% if u.period_from %}{{ u.period_from | dateformat }}{% if u.period_to %} – {{ u.period_to | dateformat }}{% endif %}{% else %}—{% endif %}</td>
+      <td style="color:#555;">{{ u.filename }}</td>
+      <td class="text-end">{{ "{:,}".format(u.total_rows or 0) }}</td>
+      <td>{{ u.uploaded_by | title }}</td>
+      <td>{{ u.created_at[:10] | dateformat }}</td>
+      <td>
+        <a href="{{ url_for('sales_detail', upload_id=u.id) }}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-eye"></i>
+        </a>
+        <form method="POST" action="{{ url_for('sales_delete', upload_id=u.id) }}" class="d-inline"
+              onsubmit="return confirm('Delete this upload and all its lines?')">
+          <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-graph-up-arrow" style="font-size:3rem;"></i>
+  <p class="mt-3">No sales files uploaded yet.</p>
+  <a href="{{ url_for('sales_upload') }}" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Upload your first file</a>
+</div>
+{% endif %}
+{% endblock %}

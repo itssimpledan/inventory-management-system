@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}User Management{% endblock %}
+{% block page_title %}<i class="bi bi-people me-2" style="color:#2E75B6"></i>User Management{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+    <i class="bi bi-person-plus me-1"></i>Add User
+  </button>
+{% endblock %}
+
+{% block content %}
+<div class="ims-table">
+  <div class="p-3" style="background:#fff;border-bottom:1px solid #eee;">
+    <span style="font-weight:700;color:#1F4E79;font-size:14px;">{{ users | length }} User{% if users|length != 1 %}s{% endif %}</span>
+    <span class="ms-3 text-muted" style="font-size:12px;">Only Admins can manage users</span>
+  </div>
+  <table class="table table-hover sortable">
+    <thead>
+      <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td class="fw-600">{{ u.full_name }}</td>
+        <td style="color:#555;">{{ u.username }}</td>
+        <td>
+          <span class="badge-status
+            {% if u.role == 'admin' %}s-deposit
+            {% elif u.role == 'finance_manager' %}s-received
+            {% elif u.role == 'finance_exec' %}s-approved
+            {% elif u.role == 'ops_manager' %}s-pending
+            {% elif u.role == 'ops_planner' %}s-shipped
+            {% else %}s-ops-approved{% endif %}">
+            <i class="bi bi-shield{% if u.role == 'admin' %}-fill{% elif u.role in ('finance_manager','finance_exec') %}-check{% else %}{% endif %} me-1"></i>
+            {% if u.role == 'admin' %}Admin
+            {% elif u.role == 'finance_manager' %}Finance Manager
+            {% elif u.role == 'finance_exec' %}Finance Exec
+            {% elif u.role == 'ops_manager' %}Ops Manager
+            {% elif u.role == 'ops_planner' %}Ops Planner
+            {% elif u.role == 'ops_exec' %}Ops Exec
+            {% else %}{{ u.role | title }}{% endif %}
+          </span>
+        </td>
+        <td>
+          {% if u.active %}
+            <span class="badge-status s-received"><i class="bi bi-check-circle me-1"></i>Active</span>
+          {% else %}
+            <span class="badge-status s-cancelled"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+          {% endif %}
+        </td>
+        <td>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2 me-1"
+            data-bs-toggle="modal" data-bs-target="#editUserModal"
+            data-id="{{ u.id }}" data-username="{{ u.username }}"
+            data-fullname="{{ u.full_name }}" data-role="{{ u.role }}"
+            data-active="{{ u.active }}">
+            <i class="bi bi-pencil"></i> Edit
+          </button>
+          {% if u.username != session.username %}
+          <form method="POST" action="{{ url_for('user_toggle', user_id=u.id) }}" class="d-inline">
+            <button type="submit" class="btn btn-sm py-0 px-2
+              {% if u.active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+              onclick="return confirm('{% if u.active %}Deactivate{% else %}Activate{% endif %} {{ u.full_name }}?')">
+              {% if u.active %}<i class="bi bi-person-dash"></i> Deactivate
+              {% else %}<i class="bi bi-person-check"></i> Activate{% endif %}
+            </button>
+          </form>
+          <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1"
+            data-bs-toggle="modal" data-bs-target="#deleteUserModal"
+            data-id="{{ u.id }}" data-name="{{ u.full_name }}">
+            <i class="bi bi-trash"></i>
+          </button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Role guide -->
+<div class="row g-3 mt-2">
+  <!-- Operations column -->
+  <div class="col-md-6">
+    <div class="form-card h-100" style="background:#EBF3FB;border:1px solid #BDD7EE;">
+      <div class="fw-700 mb-2" style="font-size:12px;color:#1F4E79;text-transform:uppercase;letter-spacing:.05em;">
+        <i class="bi bi-gear me-1"></i>Operations
+      </div>
+      <div class="mb-2 p-2 rounded" style="background:#fff;">
+        <div class="fw-600" style="font-size:12px;"><i class="bi bi-shield me-1" style="color:#FF9F7F;"></i>Ops Manager</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">1st PO approver · Cancel POs · View all screens</div>
+      </div>
+      <div class="mb-2 p-2 rounded" style="background:#fff;">
+        <div class="fw-600" style="font-size:12px;"><i class="bi bi-shield me-1" style="color:#87CEEB;"></i>Ops Planner</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Raise new POs · View PO list &amp; inventory</div>
+      </div>
+      <div class="p-2 rounded" style="background:#fff;">
+        <div class="fw-600" style="font-size:12px;"><i class="bi bi-shield me-1" style="color:#B0C4DE;"></i>Ops Exec</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Receive goods · Log inventory movements</div>
+      </div>
+    </div>
+  </div>
+  <!-- Finance column -->
+  <div class="col-md-4">
+    <div class="form-card h-100" style="background:#EFF8F0;border:1px solid #A9D18E;">
+      <div class="fw-700 mb-2" style="font-size:12px;color:#375623;text-transform:uppercase;letter-spacing:.05em;">
+        <i class="bi bi-cash-coin me-1"></i>Finance
+      </div>
+      <div class="mb-2 p-2 rounded" style="background:#fff;">
+        <div class="fw-600" style="font-size:12px;"><i class="bi bi-shield-check me-1" style="color:#90EE90;"></i>Finance Manager</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">2nd PO approver (final sign-off)</div>
+      </div>
+      <div class="p-2 rounded" style="background:#fff;">
+        <div class="fw-600" style="font-size:12px;"><i class="bi bi-shield-check me-1" style="color:#68D391;"></i>Finance Exec</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Record deposit &amp; full payment · Update PO status</div>
+      </div>
+    </div>
+  </div>
+  <!-- Admin column -->
+  <div class="col-md-2">
+    <div class="form-card h-100" style="background:#FFF9E6;border:1px solid #FFD700;">
+      <div class="fw-700 mb-2" style="font-size:12px;color:#856404;text-transform:uppercase;letter-spacing:.05em;">
+        <i class="bi bi-shield-fill me-1"></i>Admin
+      </div>
+      <div class="p-2 rounded" style="background:#fff;">
+        <div class="fw-600" style="font-size:12px;"><i class="bi bi-shield-fill me-1" style="color:#FFD700;"></i>Admin</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Full access to all functions &amp; settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD USER MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('user_add') }}">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white"><i class="bi bi-person-plus me-2"></i>Add New User</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-600">Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="full_name" class="form-control" placeholder="e.g. Jane Smith" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Username <span class="text-danger">*</span></label>
+            <input type="text" name="username" class="form-control" placeholder="e.g. jane (lowercase, no spaces)" required pattern="[a-z0-9_]+">
+            <small class="text-muted">Lowercase letters, numbers and underscores only</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Password <span class="text-danger">*</span></label>
+            <input type="password" name="password" class="form-control" placeholder="Minimum 6 characters" required minlength="6">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Role <span class="text-danger">*</span></label>
+            <select name="role" class="form-select" required>
+              <optgroup label="Operations">
+                <option value="ops_planner">Ops Planner — Raise purchase orders</option>
+                <option value="ops_manager">Ops Manager — 1st PO approver</option>
+                <option value="ops_exec">Ops Exec — Receive goods, log movements</option>
+              </optgroup>
+              <optgroup label="Finance">
+                <option value="finance_manager">Finance Manager — 2nd PO approver</option>
+                <option value="finance_exec">Finance Exec — Record payments</option>
+              </optgroup>
+              <optgroup label="Administration">
+                <option value="admin">Admin — Full access</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i>Add User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT USER MODAL ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('user_edit') }}">
+        <input type="hidden" name="user_id" id="edit_user_id">
+        <div class="modal-header" style="background:#1F4E79;">
+          <h5 class="modal-title text-white"><i class="bi bi-pencil me-2"></i>Edit User — <span id="edit_modal_name"></span></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-600">Full Name</label>
+            <input type="text" name="full_name" id="edit_full_name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Username</label>
+            <input type="text" name="username" id="edit_username_field" class="form-control"
+              pattern="[a-z0-9_]+" title="Lowercase letters, numbers and underscores only" required>
+            <small class="text-muted">Lowercase letters, numbers and underscores only</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">New Password</label>
+            <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current password" minlength="6">
+            <small class="text-muted">Only fill this in if you want to change the password</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Role</label>
+            <select name="role" id="edit_role" class="form-select" required>
+              <optgroup label="Operations">
+                <option value="ops_planner">Ops Planner</option>
+                <option value="ops_manager">Ops Manager</option>
+                <option value="ops_exec">Ops Exec</option>
+              </optgroup>
+              <optgroup label="Finance">
+                <option value="finance_manager">Finance Manager</option>
+                <option value="finance_exec">Finance Exec</option>
+              </optgroup>
+              <optgroup label="Administration">
+                <option value="admin">Admin</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── DELETE USER MODAL ──────────────────────────────────────────────────── -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" id="deleteUserForm">
+        <div class="modal-header" style="background:#dc3545;">
+          <h5 class="modal-title text-white"><i class="bi bi-trash me-2"></i>Delete User</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center py-4">
+          <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:2rem;"></i>
+          <p class="mt-3 mb-1">Are you sure you want to delete</p>
+          <p class="fw-bold" id="delete_user_name"></p>
+          <p class="text-muted" style="font-size:12px;">This cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const editModal = document.getElementById('editUserModal')
+editModal.addEventListener('show.bs.modal', e => {
+  const btn = e.relatedTarget
+  document.getElementById('edit_user_id').value        = btn.dataset.id
+  document.getElementById('edit_full_name').value      = btn.dataset.fullname
+  document.getElementById('edit_username_field').value = btn.dataset.username
+  document.getElementById('edit_role').value           = btn.dataset.role
+  document.getElementById('edit_modal_name').textContent = btn.dataset.fullname
+})
+
+const deleteModal = document.getElementById('deleteUserModal')
+deleteModal.addEventListener('show.bs.modal', e => {
+  const btn = e.relatedTarget
+  document.getElementById('delete_user_name').textContent = btn.dataset.name
+  document.getElementById('deleteUserForm').action = '/settings/users/' + btn.dataset.id + '/delete'
+})
+</script>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Download Templates{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-arrow-down me-2" style="color:#2E75B6"></i>Download Templates{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>About Templates</div>
+      <p style="font-size:13px;color:#555;margin:0;">
+        Download any template below, fill in your data following the column headers and example row, then upload using the corresponding import page.
+        The example row (shaded) shows the expected format — delete it before uploading.
+      </p>
+    </div>
+
+    <div class="row g-3 mt-1">
+
+      <!-- Suppliers -->
+      <div class="col-md-6">
+        <div class="form-card h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div style="width:36px;height:36px;background:#DEEAF1;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+              <i class="bi bi-building" style="color:#1F4E79;font-size:18px;"></i>
+            </div>
+            <div>
+              <div class="fw-600" style="color:#1F4E79;">Suppliers</div>
+              <div style="font-size:11px;color:#888;">For Import Suppliers page</div>
+            </div>
+          </div>
+          <p style="font-size:12px;color:#666;margin-bottom:12px;">
+            Columns: Supplier ID, Name, Contact Name, Email, Phone, Payment Terms, Lead Days
+          </p>
+          <a href="{{ url_for('template_download', name='suppliers') }}"
+             class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-download me-1"></i>Download Suppliers Template
+          </a>
+          <a href="{{ url_for('supplier_import') }}"
+             class="btn btn-sm btn-link w-100 mt-1" style="font-size:11px;">
+            Go to Import Suppliers →
+          </a>
+        </div>
+      </div>
+
+      <!-- Items / SKUs -->
+      <div class="col-md-6">
+        <div class="form-card h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div style="width:36px;height:36px;background:#DEEAF1;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+              <i class="bi bi-boxes" style="color:#1F4E79;font-size:18px;"></i>
+            </div>
+            <div>
+              <div class="fw-600" style="color:#1F4E79;">Items / SKUs &amp; Bundles</div>
+              <div style="font-size:11px;color:#888;">For Import Master Data page</div>
+            </div>
+          </div>
+          <p style="font-size:12px;color:#666;margin-bottom:12px;">
+            3-tab Excel: <strong>AS</strong> (andSons SKUs), <strong>OVA</strong> (Ova SKUs),
+            <strong>&amp;Sons (Update)</strong> (Bundles). Matches the SKU Cost Price Listings format.
+          </p>
+          <a href="{{ url_for('template_download', name='master_data') }}"
+             class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-download me-1"></i>Download Master Data Template
+          </a>
+          <a href="{{ url_for('master_data_import') }}"
+             class="btn btn-sm btn-link w-100 mt-1" style="font-size:11px;">
+            Go to Import Master Data →
+          </a>
+        </div>
+      </div>
+
+      <!-- Inventory Count -->
+      <div class="col-md-6">
+        <div class="form-card h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div style="width:36px;height:36px;background:#DEEAF1;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+              <i class="bi bi-clipboard2-check" style="color:#1F4E79;font-size:18px;"></i>
+            </div>
+            <div>
+              <div class="fw-600" style="color:#1F4E79;">Month-End Physical Count</div>
+              <div style="font-size:11px;color:#888;">For Upload Physical Count page</div>
+            </div>
+          </div>
+          <p style="font-size:12px;color:#666;margin-bottom:12px;">
+            Columns: <strong>item_id</strong>, <strong>physical_qty</strong>.
+            The period is selected on the upload page — do not include a period column.
+          </p>
+          <a href="{{ url_for('template_download', name='inventory_count') }}"
+             class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-download me-1"></i>Download Inventory Count Template
+          </a>
+          <a href="{{ url_for('mec_stockcount_new') }}"
+             class="btn btn-sm btn-link w-100 mt-1" style="font-size:11px;">
+            Go to Upload Physical Count →
+          </a>
+        </div>
+      </div>
+
+      <!-- Items flat (future) -->
+      <div class="col-md-6">
+        <div class="form-card h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div style="width:36px;height:36px;background:#f0f4f8;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+              <i class="bi bi-box" style="color:#888;font-size:18px;"></i>
+            </div>
+            <div>
+              <div class="fw-600" style="color:#555;">Items / SKUs (Flat)</div>
+              <div style="font-size:11px;color:#888;">Quick single-sheet import</div>
+            </div>
+          </div>
+          <p style="font-size:12px;color:#666;margin-bottom:12px;">
+            Simple flat format: SKU ID, Name, Brand, Unit Price, UOM, Reorder Point, Lead Days, Preferred Supplier.
+            Use this for smaller updates outside the full master data file.
+          </p>
+          <a href="{{ url_for('template_download', name='items') }}"
+             class="btn btn-sm btn-outline-secondary w-100">
+            <i class="bi bi-download me-1"></i>Download Items Template
+          </a>
+          <span class="d-block text-center mt-1" style="font-size:11px;color:#888;">
+            Upload via Import Master Data (AS or OVA tab format)
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

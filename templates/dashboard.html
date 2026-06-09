@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2 me-2" style="color:#2E75B6"></i>Dashboard{% endblock %}
+
+{% block content %}
+
+{% if returned_pos %}
+<!-- Returned PO Alert (demand planner / admin) -->
+<div class="alert py-2 mb-3" style="background:#FFF3CD;border:1px solid #FFCA2C;border-radius:8px;font-size:13px;color:#664d03;">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <i class="bi bi-arrow-return-left me-2" style="font-size:15px;"></i>
+      <strong>{{ returned_pos | length }} PO{{ 's' if returned_pos | length > 1 else '' }} returned for amendment</strong>
+      — please review and resubmit or cancel:
+      {% for rpo in returned_pos %}
+        <a href="{{ url_for('po_detail', po_id=rpo.id) }}"
+           class="fw-700 ms-2" style="color:#664d03;text-decoration:underline;">{{ rpo.po_number }}</a>{% if not loop.last %},{% endif %}
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('po_list') }}?status=Returned" class="btn btn-sm btn-warning py-0 px-3">View All</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- PO Status Notifications -->
+{% set non_return_notifs = unread_notifications | selectattr('notif_type', 'ne', 'warning') | list %}
+{% if non_return_notifs %}
+<div class="mb-3">
+  {% for n in non_return_notifs %}
+  <div class="alert py-2 mb-2 d-flex align-items-start gap-2"
+       style="{% if n.notif_type == 'success' %}background:#EDF7EE;border:1px solid #A3CFA8;color:#1a5c2a;{% else %}background:#EAF3FB;border:1px solid #90C2E7;color:#154360;{% endif %}border-radius:8px;font-size:13px;">
+    <span style="margin-top:1px;flex-shrink:0;">
+      {% if n.notif_type == 'success' %}<i class="bi bi-check-circle-fill" style="color:#1a7f3c;"></i>
+      {% else %}<i class="bi bi-info-circle-fill" style="color:#2E75B6;"></i>{% endif %}
+    </span>
+    <div style="flex:1;">
+      {% if n.po_id %}
+        <a href="{{ url_for('po_detail', po_id=n.po_id) }}" class="fw-700 me-1"
+           style="color:inherit;text-decoration:underline;">{{ n.po_number }}</a>
+      {% endif %}
+      {{ n.message }}
+      <span class="ms-2" style="font-size:11px;opacity:.6;">{{ n.created_at[:16] }}</span>
+    </div>
+    <form action="{{ url_for('dismiss_notification', notif_id=n.id) }}" method="POST" class="d-inline ms-1">
+      <button type="submit" style="background:none;border:none;color:inherit;opacity:.5;font-size:16px;padding:0;cursor:pointer;line-height:1;" title="Dismiss">&times;</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════════
+     INVENTORY SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="d-flex align-items-center mb-2 mt-1">
+  <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">Inventory</span>
+  <hr class="flex-grow-1 ms-2 me-0" style="border-color:#e5e5e5;">
+</div>
+
+<!-- Inventory KPI Row -->
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value">${{ "{:,.0f}".format(total_inventory) }}</div>
+          <div class="kpi-label">Total Inventory Value</div>
+        </div>
+        <div class="kpi-icon" style="background:#DEEAF1;color:#1F4E79;"><i class="bi bi-archive"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value">{{ summary | length }}</div>
+          <div class="kpi-label">Active SKUs</div>
+        </div>
+        <div class="kpi-icon" style="background:#E2EFDA;color:#375623;"><i class="bi bi-tags"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value {% if reorder_count > 0 %}text-danger{% endif %}">{{ reorder_count }}</div>
+          <div class="kpi-label">SKUs Below Reorder Point</div>
+        </div>
+        <div class="kpi-icon" style="background:#F8D7DA;color:#721C24;"><i class="bi bi-exclamation-triangle"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value {% if below_runrate | length > 0 %}text-warning{% endif %}">{{ below_runrate | length }}</div>
+          <div class="kpi-label">SKUs Below Avg Sales Rate</div>
+        </div>
+        <div class="kpi-icon" style="background:#FFF3CD;color:#856404;"><i class="bi bi-graph-down-arrow"></i></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Top 5 SKUs by Inventory Value -->
+  <div class="col-lg-5">
+    <div class="ims-table h-100">
+      <div class="d-flex align-items-center justify-content-between p-3" style="background:#fff;border-bottom:1px solid #eee;">
+        <span style="font-weight:700;color:#1F4E79;font-size:14px;"><i class="bi bi-trophy me-2"></i>Top 5 SKUs by Inventory Value</span>
+        <a href="{{ url_for('export_inventory') }}" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Export inventory CSV"><i class="bi bi-download me-1"></i>CSV</a>
+      </div>
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">WACC</th>
+            <th class="text-end">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in top5_skus %}
+          <tr>
+            <td>
+              <span class="fw-600" style="color:#1F4E79;">{{ s.item_id }}</span><br>
+              <small class="text-muted">{{ s.name }}</small>
+            </td>
+            <td class="text-end fw-600">{{ "{:,.0f}".format(s.qty_on_hand | float) if s.qty_on_hand else "0" }}</td>
+            <td class="text-end" style="color:#555;">${{ "%.4f" | format(s.wacc) }}</td>
+            <td class="text-end fw-600" style="color:#1F4E79;">${{ "{:,.0f}".format(s.inventory_value) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-3">No inventory data yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Inventory Value Trend -->
+  <div class="col-lg-7">
+    <div class="ims-table h-100">
+      <div class="p-3" style="background:#fff;border-bottom:1px solid #eee;">
+        <span style="font-weight:700;color:#1F4E79;font-size:14px;"><i class="bi bi-graph-up me-2"></i>Inventory Value Trend</span>
+      </div>
+      <div class="p-3" style="height:230px;">
+        {% if trend_months %}
+        <canvas id="invTrendChart"></canvas>
+        {% else %}
+        <div class="d-flex align-items-center justify-content-center h-100 text-muted" style="font-size:13px;">
+          <i class="bi bi-bar-chart-line me-2"></i>No movement data yet.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Below Run-Rate Alert Table (only shown if there are flagged SKUs) -->
+{% if below_runrate %}
+<div class="ims-table mb-4">
+  <div class="p-3" style="background:#FFFBF0;border-bottom:1px solid #FFE082;">
+    <span style="font-weight:700;color:#856404;font-size:14px;">
+      <i class="bi bi-graph-down-arrow me-2"></i>SKUs Below Historical Average Sales Run-Rate
+    </span>
+    <small class="text-muted ms-2" style="font-weight:400;">Stock coverage is less than one average monthly sales cycle</small>
+  </div>
+  <table class="table table-hover mb-0" style="font-size:13px;">
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th class="text-end">Qty On Hand</th>
+        <th class="text-end">Avg Monthly Sales</th>
+        <th class="text-end">Est. Weeks Cover</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in below_runrate %}
+      <tr>
+        <td>
+          <span class="fw-600" style="color:#1F4E79;">{{ r.item_id }}</span><br>
+          <small class="text-muted">{{ r.name }}</small>
+        </td>
+        <td class="text-end fw-600" style="color:{% if r.qty_on_hand <= 0 %}#842029{% else %}#664d03{% endif %};">
+          {{ "{:,.1f}".format(r.qty_on_hand | float) }}
+        </td>
+        <td class="text-end" style="color:#555;">{{ "{:,.1f}".format(r.avg_monthly) }}</td>
+        <td class="text-end fw-600" style="color:{% if r.weeks_cover is not none and r.weeks_cover < 2 %}#842029{% else %}#856404{% endif %};">
+          {% if r.weeks_cover is not none %}{{ r.weeks_cover }}w{% else %}—{% endif %}
+        </td>
+        <td>
+          {% if r.qty_on_hand <= 0 %}
+            <span style="background:#F8D7DA;color:#842029;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">OUT OF STOCK</span>
+          {% elif r.weeks_cover is not none and r.weeks_cover < 2 %}
+            <span style="background:#F8D7DA;color:#842029;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">CRITICAL</span>
+          {% else %}
+            <span style="background:#FFF3CD;color:#856404;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">LOW STOCK</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PURCHASE ORDERS SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="d-flex align-items-center mb-2">
+  <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;">Purchase Orders</span>
+  <hr class="flex-grow-1 ms-2 me-0" style="border-color:#e5e5e5;">
+</div>
+
+<!-- PO KPI Row -->
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value">{{ active_pos }}</div>
+          <div class="kpi-label">Active Purchase Orders</div>
+        </div>
+        <div class="kpi-icon" style="background:#D1ECF1;color:#0C5460;"><i class="bi bi-file-earmark-text"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <a href="{{ url_for('po_list') }}?status=Pending+Approval" style="text-decoration:none;">
+    <div class="kpi-card" style="cursor:pointer;">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value {% if po_counts.get('Pending Approval',0) > 0 %}text-warning{% endif %}">{{ po_counts.get('Pending Approval', 0) }}</div>
+          <div class="kpi-label">Pending Approval</div>
+        </div>
+        <div class="kpi-icon" style="background:#FFF3CD;color:#856404;"><i class="bi bi-hourglass-split"></i></div>
+      </div>
+    </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card" style="{% if overdue_payment_pos %}border-left:3px solid #dc3545;{% endif %}">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value {% if overdue_payment_pos | length > 0 %}text-danger{% endif %}">{{ overdue_payment_pos | length }}</div>
+          <div class="kpi-label">Overdue Payments</div>
+        </div>
+        <div class="kpi-icon" style="background:#F8D7DA;color:#721C24;"><i class="bi bi-exclamation-circle"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card" style="{% if overdue_delivery_pos %}border-left:3px solid #fd7e14;{% endif %}">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="kpi-value {% if overdue_delivery_pos | length > 0 %}text-warning{% endif %}">{{ overdue_delivery_pos | length }}</div>
+          <div class="kpi-label">Overdue Deliveries</div>
+        </div>
+        <div class="kpi-icon" style="background:#FDE8D0;color:#7d3c00;"><i class="bi bi-truck"></i></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Overdue Payment POs -->
+  <div class="col-lg-6">
+    <div class="ims-table">
+      <div class="p-3" style="background:{% if overdue_payment_pos %}#FFF5F5{% else %}#fff{% endif %};border-bottom:1px solid #eee;">
+        <span style="font-weight:700;font-size:14px;color:{% if overdue_payment_pos %}#842029{% else %}#1F4E79{% endif %};">
+          <i class="bi bi-exclamation-circle{% if overdue_payment_pos %}-fill{% endif %} me-2"></i>Overdue Payments
+        </span>
+        {% if overdue_payment_pos %}
+        <small class="ms-2 text-muted" style="font-weight:400;">Payment due date has passed</small>
+        {% endif %}
+      </div>
+      {% if overdue_payment_pos %}
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead>
+          <tr>
+            <th>PO</th>
+            <th>Supplier</th>
+            <th class="text-end">Balance</th>
+            <th>Due Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for po in overdue_payment_pos %}
+          {% set balance = (po.total_val or 0) - (po.amount_paid or 0) %}
+          <tr style="background:#FFF5F5;">
+            <td>
+              <a href="{{ url_for('po_detail', po_id=po.id) }}" class="fw-700" style="color:#842029;text-decoration:none;">{{ po.po_number }}</a><br>
+              <span class="badge-status
+                {% if po.status == 'Deposit Paid' %}s-deposit{% else %}s-approved{% endif %}
+              " style="font-size:10px;">{{ po.status }}</span>
+            </td>
+            <td style="color:#555;">{{ po.supplier_name }}</td>
+            <td class="text-end fw-700" style="color:#842029;">${{ "{:,.2f}".format(balance) }}</td>
+            <td>
+              <span style="color:#842029;font-weight:700;">
+                {{ po.payment_due_date | dateformat }}<br>
+                <small style="font-weight:400;font-size:11px;">
+                  {{ ((today | string)[:10] | replace('-','') | int - (po.payment_due_date | replace('-','') | int)) }} days ago
+                </small>
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="p-4 text-center text-muted" style="font-size:13px;">
+        <i class="bi bi-check-circle me-2" style="color:#375623;"></i>No overdue payments.
+      </div>
+      {% endif %}
+      <div class="p-2 text-end" style="border-top:1px solid #eee;">
+        <a href="{{ url_for('po_list') }}" style="font-size:12px;color:#2E75B6;">View all POs →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overdue Delivery POs -->
+  <div class="col-lg-6">
+    <div class="ims-table">
+      <div class="p-3" style="background:{% if overdue_delivery_pos %}#FFF8F0{% else %}#fff{% endif %};border-bottom:1px solid #eee;">
+        <span style="font-weight:700;font-size:14px;color:{% if overdue_delivery_pos %}#7d3c00{% else %}#1F4E79{% endif %};">
+          <i class="bi bi-truck{% if overdue_delivery_pos %}-flatbed{% endif %} me-2"></i>Overdue Deliveries
+        </span>
+        {% if overdue_delivery_pos %}
+        <small class="ms-2 text-muted" style="font-weight:400;">Expected delivery date has passed</small>
+        {% endif %}
+      </div>
+      {% if overdue_delivery_pos %}
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead>
+          <tr>
+            <th>PO</th>
+            <th>Supplier / Items</th>
+            <th>Status</th>
+            <th>Expected</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for po in overdue_delivery_pos %}
+          <tr style="background:#FFF8F0;">
+            <td>
+              <a href="{{ url_for('po_detail', po_id=po.id) }}" class="fw-700" style="color:#7d3c00;text-decoration:none;">{{ po.po_number }}</a>
+            </td>
+            <td>
+              <span style="color:#555;">{{ po.supplier_name }}</span><br>
+              <small class="text-muted">
+                {% if po.line_count and po.line_count > 1 %}{{ po.line_count }} SKUs{% else %}{{ po.first_item_name or '—' }}{% endif %}
+              </small>
+            </td>
+            <td>
+              <span class="badge-status
+                {% if po.status == 'Fully Paid – Shipped' %}s-shipped
+                {% elif po.status == 'Deposit Paid' %}s-deposit
+                {% elif po.status == 'Partially Received' %}s-partial
+                {% else %}s-approved{% endif %}
+              " style="font-size:10px;">{{ po.status }}</span>
+            </td>
+            <td>
+              <span style="color:#7d3c00;font-weight:700;">
+                {{ po.expected_delivery_date | dateformat }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="p-4 text-center text-muted" style="font-size:13px;">
+        <i class="bi bi-check-circle me-2" style="color:#375623;"></i>No overdue deliveries.
+      </div>
+      {% endif %}
+      <div class="p-2 text-end" style="border-top:1px solid #eee;">
+        <a href="{{ url_for('delivery_calendar') }}" style="font-size:12px;color:#2E75B6;">View delivery calendar →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PO Status Summary + Recent POs -->
+<div class="row g-3 mt-1">
+  <div class="col-lg-4">
+    <div class="ims-table">
+      <div class="p-3" style="background:#fff;border-bottom:1px solid #eee;">
+        <span style="font-weight:700;color:#1F4E79;font-size:14px;"><i class="bi bi-pie-chart me-2"></i>PO Status Breakdown</span>
+      </div>
+      <div class="p-3">
+        {% set statuses = [
+          ('Draft',                's-draft',    'bi-pencil'),
+          ('Pending Approval',     's-pending',  'bi-hourglass-split'),
+          ('Ops Approved',         's-ops-approved','bi-check'),
+          ('Approved',             's-approved', 'bi-check-circle'),
+          ('Deposit Paid',         's-deposit',  'bi-cash'),
+          ('Fully Paid – Shipped', 's-shipped',  'bi-truck'),
+          ('Partially Received',   's-partial',  'bi-box-arrow-in-down'),
+          ('Fully Paid – Received','s-received', 'bi-box-seam'),
+          ('Returned',             's-returned', 'bi-arrow-return-left'),
+          ('Cancelled',            's-cancelled','bi-x-circle'),
+        ] %}
+        {% for status, badge, icon in statuses %}
+        {% if po_counts.get(status, 0) > 0 %}
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <a href="{{ url_for('po_list') }}?status={{ status | urlencode }}" style="text-decoration:none;">
+            <span class="badge-status {{ badge }}"><i class="bi {{ icon }} me-1"></i>{{ status }}</span>
+          </a>
+          <span class="fw-700" style="color:#1F4E79;">{{ po_counts.get(status, 0) }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% if not po_counts %}
+        <p class="text-muted text-center small mb-0">No POs yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="ims-table">
+      <div class="d-flex align-items-center justify-content-between p-3" style="background:#fff;border-bottom:1px solid #eee;">
+        <span style="font-weight:700;color:#1F4E79;font-size:14px;"><i class="bi bi-clock-history me-2"></i>Recent POs</span>
+        <a href="{{ url_for('po_list') }}" style="font-size:12px;">View all</a>
+      </div>
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead>
+          <tr>
+            <th>PO Number</th>
+            <th>Supplier</th>
+            <th>Item(s)</th>
+            <th class="text-end">Value</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for po in recent_pos %}
+          <tr>
+            <td>
+              <a href="{{ url_for('po_detail', po_id=po.id) }}" class="fw-700" style="color:#1F4E79;text-decoration:none;">{{ po.po_number }}</a>
+            </td>
+            <td style="color:#555;">{{ po.supplier_name }}</td>
+            <td>
+              {% if po.line_count and po.line_count > 1 %}
+                <span style="font-size:11px;background:#DEEAF1;color:#1F4E79;border-radius:4px;padding:2px 6px;font-weight:600;">{{ po.line_count }} SKUs</span>
+              {% else %}
+                {{ po.first_item_name or '—' }}
+              {% endif %}
+            </td>
+            <td class="text-end fw-600">${{ "{:,.0f}".format(po.total_val or 0) }}</td>
+            <td>
+              <span class="badge-status
+                {% if po.status == 'Fully Paid – Received' %}s-received
+                {% elif po.status == 'Deposit Paid' %}s-deposit
+                {% elif po.status == 'Approved' %}s-approved
+                {% elif po.status == 'Ops Approved' %}s-ops-approved
+                {% elif po.status == 'Pending Approval' %}s-pending
+                {% elif po.status == 'Fully Paid – Shipped' %}s-shipped
+                {% elif po.status == 'Cancelled' %}s-cancelled
+                {% elif po.status == 'Returned' %}s-returned
+                {% else %}s-draft{% endif %}" style="font-size:11px;">{{ po.status }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-3">No purchase orders yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% if trend_months %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+(function() {
+  var labels = {{ trend_months | map(attribute='month') | list | tojson }};
+  var values = {{ trend_months | map(attribute='value') | list | tojson }};
+
+  // Shorten labels: "2025-03" → "Mar '25"
+  var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var shortLabels = labels.map(function(m) {
+    var parts = m.split('-');
+    return monthNames[parseInt(parts[1])-1] + " '" + parts[0].slice(2);
+  });
+
+  var ctx = document.getElementById('invTrendChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: shortLabels,
+      datasets: [{
+        label: 'Inventory Value ($)',
+        data: values,
+        borderColor: '#2E75B6',
+        backgroundColor: 'rgba(46,117,182,0.08)',
+        borderWidth: 2,
+        pointBackgroundColor: '#2E75B6',
+        pointRadius: 3,
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ' $' + ctx.parsed.y.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0});
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, color: '#888' }
+        },
+        y: {
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: {
+            font: { size: 11 }, color: '#888',
+            callback: function(v) {
+              if (v >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+              if (v >= 1000) return '$' + (v/1000).toFixed(0) + 'K';
+              return '$' + v;
+            }
+          }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}
