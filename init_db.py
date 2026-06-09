@@ -290,9 +290,9 @@ def init_db():
         ("daniel",            generate_password_hash("admin123"),  "Daniel",           "admin"),
         ("finance_manager",   generate_password_hash("test123"),   "Finance Manager",  "finance_manager"),
         ("finance_exec",      generate_password_hash("test123"),   "Finance Exec",     "finance_exec"),
-        ("ops_manager",       generate_password_hash("test123"),   "Ops Manager",      "ops_manager"),
-        ("ops_planner",       generate_password_hash("test123"),   "Ops Planner",      "ops_planner"),
-        ("ops_exec",          generate_password_hash("test123"),   "Ops Exec",         "ops_exec"),
+        ("operations_manager", generate_password_hash("test123"),  "Operations Manager", "ops_manager"),
+        ("operations_planner", generate_password_hash("test123"), "Operations Planner", "ops_planner"),
+        ("operations_exec",    generate_password_hash("test123"), "Operations Exec",    "ops_exec"),
     ]
     db.executemany("INSERT INTO users (username,password,full_name,role) VALUES (?,?,?,?)", users)
 
