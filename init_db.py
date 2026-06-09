@@ -67,7 +67,7 @@ def init_db():
         po_number               TEXT    NOT NULL UNIQUE,
         po_date                 TEXT    NOT NULL,
         supplier_id             TEXT    NOT NULL,
-        item_id                 TEXT    NOT NULL,
+        item_id                 TEXT,
         qty_ordered             REAL    NOT NULL DEFAULT 0,
         unit_price              REAL    NOT NULL DEFAULT 0,
         free_units              REAL    DEFAULT 0,

@@ -5988,6 +5988,7 @@ def run_migrations():
                 approved_by TEXT, approval_date TEXT, deposit_date TEXT,
                 full_payment_date TEXT, expected_delivery_date TEXT,
                 received_date TEXT, received_qty REAL, notes TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
                 updated_at TEXT DEFAULT (datetime('now')),
                 payment_due_date TEXT)""")
             db.execute("""INSERT INTO purchase_orders_new
