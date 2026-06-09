@@ -248,12 +248,12 @@ def init_db():
 
     # Users
     users = [
-        ("daniel",   generate_password_hash("admin123"),    "Daniel",        "admin"),
-        ("sarah",    generate_password_hash("finance123"),   "Sarah M",       "finance_manager"),
-        ("rachel",   generate_password_hash("finance123"),   "Rachel T",      "finance_exec"),
-        ("michael",  generate_password_hash("ops123"),       "Michael T",     "ops_manager"),
-        ("amy",      generate_password_hash("ops123"),       "Amy K",         "ops_planner"),
-        ("james",    generate_password_hash("ops123"),       "James L",       "ops_exec"),
+        ("daniel",            generate_password_hash("admin123"),  "Daniel",           "admin"),
+        ("finance_manager",   generate_password_hash("test123"),   "Finance Manager",  "finance_manager"),
+        ("finance_exec",      generate_password_hash("test123"),   "Finance Exec",     "finance_exec"),
+        ("ops_manager",       generate_password_hash("test123"),   "Ops Manager",      "ops_manager"),
+        ("ops_planner",       generate_password_hash("test123"),   "Ops Planner",      "ops_planner"),
+        ("ops_exec",          generate_password_hash("test123"),   "Ops Exec",         "ops_exec"),
     ]
     db.executemany("INSERT INTO users (username,password,full_name,role) VALUES (?,?,?,?)", users)
 
