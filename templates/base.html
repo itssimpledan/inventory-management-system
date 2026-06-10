@@ -4,9 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}IMS{% endblock %} — Inventory Management</title>
+{% block head %}{% endblock %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+<!-- NProgress loading bar -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
 <style>
+  /* ── NProgress bar colour ─────────────────────── */
+  #nprogress .bar { background: #FFC000 !important; height: 3px; }
+  #nprogress .peg { box-shadow: 0 0 10px #FFC000, 0 0 5px #FFC000; }
+  #nprogress .spinner-icon { border-top-color: #FFC000; border-left-color: #FFC000; }
+
   :root {
     --navy:   #1F4E79;
     --blue:   #2E75B6;
@@ -16,8 +24,30 @@
     --green:  #375623;
     --ltgreen:#E2EFDA;
     --sidebar-w: 240px;
+    /* Light mode surfaces */
+    --bg-body:    #F4F6F9;
+    --bg-card:    #fff;
+    --bg-topbar:  #fff;
+    --bg-sidebar: #1F4E79;
+    --text-main:  #333;
+    --text-muted-c: #888;
+    --border-c:   #e8e8e8;
+    --table-head: #1F4E79;
+    --table-row-hover: #f9fbfc;
   }
-  body { background:#F4F6F9; font-family: Arial, sans-serif; font-size:14px; }
+  /* ── Dark mode overrides ─────────────────────── */
+  body.dark {
+    --bg-body:    #0f172a;
+    --bg-card:    #1e293b;
+    --bg-topbar:  #1e293b;
+    --bg-sidebar: #0f172a;
+    --text-main:  #e2e8f0;
+    --text-muted-c: #94a3b8;
+    --border-c:   #334155;
+    --table-head: #0f172a;
+    --table-row-hover: #263148;
+  }
+  body { background: var(--bg-body); font-family: Arial, sans-serif; font-size:14px; color: var(--text-main); transition: background .3s, color .3s; }
 
   /* Sidebar */
   #sidebar {
@@ -72,16 +102,49 @@
   /* Main content */
   #main { margin-left:var(--sidebar-w); min-height:100vh; }
   .topbar {
-    background:#fff; border-bottom:1px solid #e0e0e0;
+    background: var(--bg-topbar); border-bottom:1px solid var(--border-c);
     padding:12px 24px; display:flex; align-items:center;
     justify-content:space-between; position:sticky; top:0; z-index:100;
+    gap:12px;
   }
-  .topbar h4 { margin:0; font-size:18px; font-weight:700; color:var(--navy); }
+  .topbar h4 { margin:0; font-size:18px; font-weight:700; color:var(--navy); white-space:nowrap; }
   .content   { padding:24px; }
+
+  /* Global search */
+  .global-search-wrap { position:relative; flex:1; max-width:360px; }
+  .global-search-wrap input {
+    border-radius:20px; border:1px solid var(--border-c); background: var(--bg-body);
+    color: var(--text-main); font-size:13px; padding:6px 14px 6px 36px; width:100%;
+    transition:.2s;
+  }
+  .global-search-wrap input:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(46,117,182,.15); }
+  .global-search-wrap .search-icon { position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted-c);font-size:14px;pointer-events:none; }
+  .search-dropdown {
+    position:absolute; top:calc(100% + 6px); left:0; right:0;
+    background: var(--bg-card); border:1px solid var(--border-c);
+    border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.12);
+    display:none; z-index:9999; max-height:320px; overflow-y:auto;
+  }
+  .search-dropdown.show { display:block; }
+  .search-hit { padding:9px 14px; display:flex; align-items:center; gap:10px; cursor:pointer; border-bottom:1px solid var(--border-c); text-decoration:none; color: var(--text-main); }
+  .search-hit:last-child { border-bottom:none; }
+  .search-hit:hover { background: var(--table-row-hover); }
+  .search-hit-icon { width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0; }
+  .search-hit-title { font-size:13px; font-weight:600; }
+  .search-hit-sub   { font-size:11px; color: var(--text-muted-c); }
+
+  /* Dark mode toggle button */
+  .dark-toggle {
+    width:34px;height:34px;border-radius:50%;border:1px solid var(--border-c);
+    background: var(--bg-body); color:var(--text-muted-c); cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:15px;
+    transition:.2s; flex-shrink:0;
+  }
+  .dark-toggle:hover { background:var(--ltblue); color:var(--navy); }
 
   /* Cards */
   .kpi-card {
-    background:#fff; border-radius:10px; padding:20px; border:1px solid #e8e8e8;
+    background: var(--bg-card); border-radius:10px; padding:20px; border:1px solid var(--border-c);
     transition:.2s;
   }
   .kpi-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.08); }
@@ -90,17 +153,18 @@
     display:flex; align-items:center; justify-content:center; font-size:20px;
   }
   .kpi-card .kpi-value { font-size:24px; font-weight:700; color:var(--navy); }
-  .kpi-card .kpi-label { font-size:12px; color:#888; font-weight:500; margin-top:2px; }
+  .kpi-card .kpi-label { font-size:12px; color: var(--text-muted-c); font-weight:500; margin-top:2px; }
 
   /* Tables */
-  .ims-table { background:#fff; border-radius:10px; border:1px solid #e8e8e8; overflow:hidden; }
+  .ims-table { background: var(--bg-card); border-radius:10px; border:1px solid var(--border-c); overflow:hidden; }
   .ims-table .table { margin:0; }
   .ims-table .table thead th {
-    background:var(--navy); color:#fff; font-size:12px;
+    background: var(--table-head); color:#fff; font-size:12px;
     font-weight:600; padding:10px 14px; border:none; white-space:nowrap;
   }
-  .ims-table .table tbody td { padding:10px 14px; vertical-align:middle; border-color:#f0f0f0; }
-  .ims-table .table tbody tr:hover { background:#f9fbfc; }
+  .ims-table .table tbody td { padding:10px 14px; vertical-align:middle; border-color: var(--border-c); color: var(--text-main); }
+  .ims-table .table tbody tr { background: var(--bg-card); }
+  .ims-table .table tbody tr:hover { background: var(--table-row-hover); }
 
   /* Status badges */
   .badge-status { font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; }
@@ -124,7 +188,7 @@
   .role-badge-ops     { background:#D1ECF1; color:#0C5460; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; }
 
   /* Form card */
-  .form-card { background:#fff; border-radius:10px; border:1px solid #e8e8e8; padding:24px; }
+  .form-card { background: var(--bg-card); border-radius:10px; border:1px solid var(--border-c); padding:24px; }
   .form-section-title {
     font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
     color:var(--navy); border-bottom:2px solid var(--ltblue); padding-bottom:6px; margin-bottom:16px;
@@ -322,6 +386,18 @@
       </a>
     </div>
 
+    {# ── MY PROFILE — visible to all logged-in users ── #}
+    {% set profile_active = ep == 'user_profile' %}
+    <div class="nav-section-toggle {% if not profile_active %}collapsed{% endif %}" data-target="sec-profile">
+      <span class="nav-section-label">Account</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-profile">
+      <a href="{{ url_for('user_profile') }}" class="nav-link {% if ep=='user_profile' %}active{% endif %}">
+        <i class="bi bi-person-circle"></i> My Profile
+      </a>
+    </div>
+
     {# ── SETTINGS ── #}
     {% if session.role == 'admin' %}
     <div class="nav-section-toggle {% if not settings_active %}collapsed{% endif %}" data-target="sec-settings">
@@ -382,9 +458,23 @@
 <div id="main">
   <div class="topbar">
     <h4>{% block page_title %}{% endblock %}</h4>
-    <div class="d-flex align-items-center gap-3">
+
+    <!-- Global search -->
+    <div class="global-search-wrap d-none d-md-block">
+      <i class="bi bi-search search-icon"></i>
+      <input type="text" id="globalSearchInput" placeholder="Search POs, items, suppliers…" autocomplete="off">
+      <div class="search-dropdown" id="searchDropdown"></div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2 ms-auto">
       {% block topbar_actions %}{% endblock %}
-      <span class="text-muted" style="font-size:12px;">{{ now.strftime('%d %b %Y') }}</span>
+
+      <!-- Dark mode toggle -->
+      <button class="dark-toggle" id="darkToggle" title="Toggle dark / light mode" onclick="toggleDark()">
+        <i class="bi bi-moon-stars" id="darkIcon"></i>
+      </button>
+
+      <span class="text-muted d-none d-sm-inline" style="font-size:12px;">{{ now.strftime('%d %b %Y') }}</span>
       <!-- Notification Bell -->
       {% if unread_notif_count %}
       <div class="dropdown">
@@ -452,12 +542,12 @@
   </div>
 
   <!-- ── FOOTER ───────────────────────────────────────────────────────────── -->
-  <footer style="border-top:1px solid #e8e8e8;background:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-    <span style="font-size:11px;color:#aaa;">
+  <footer style="border-top:1px solid var(--border-c);background:var(--bg-card);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <span style="font-size:11px;color:var(--text-muted-c);">
       &copy; {{ now.year }} {{ company_name }} &mdash; Inventory Management System.
-      Built with <i class="bi bi-heart-fill" style="color:#e74c3c;font-size:10px;"></i> for operational excellence.
+      Created by Daniel Wong using AI tools.
     </span>
-    <span style="font-size:11px;color:#ccc;">
+    <span style="font-size:11px;color:var(--text-muted-c);">
       <i class="bi bi-shield-lock me-1"></i>Secure &nbsp;&middot;&nbsp;
       <i class="bi bi-clock me-1"></i>{{ now.strftime('%d %b %Y') }} &nbsp;&middot;&nbsp;
       v1.0
@@ -604,6 +694,107 @@
       });
     });
   });
+})();
+</script>
+
+<!-- NProgress -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+<script>
+NProgress.configure({ showSpinner: false });
+// Start bar on any navigation link click
+document.addEventListener('DOMContentLoaded', function() {
+  NProgress.done();
+  document.querySelectorAll('a[href]').forEach(function(a) {
+    var href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript') || a.target === '_blank') return;
+    a.addEventListener('click', function() { NProgress.start(); });
+  });
+  document.querySelectorAll('form').forEach(function(f) {
+    f.addEventListener('submit', function() { NProgress.start(); });
+  });
+});
+window.addEventListener('pageshow', function() { NProgress.done(); });
+</script>
+
+<script>
+// ── Dark mode toggle ─────────────────────────────────────────────────────────
+function applyDark(on) {
+  document.body.classList.toggle('dark', on);
+  var icon = document.getElementById('darkIcon');
+  if (icon) icon.className = on ? 'bi bi-sun' : 'bi bi-moon-stars';
+}
+function toggleDark() {
+  var now = document.body.classList.contains('dark');
+  var next = !now;
+  try { localStorage.setItem('ims_dark', next ? '1' : '0'); } catch(e){}
+  applyDark(next);
+}
+(function() {
+  try {
+    var saved = localStorage.getItem('ims_dark');
+    if (saved === '1') applyDark(true);
+  } catch(e){}
+})();
+</script>
+
+<script>
+// ── Global search ─────────────────────────────────────────────────────────────
+(function() {
+  var inp  = document.getElementById('globalSearchInput');
+  var drop = document.getElementById('searchDropdown');
+  if (!inp || !drop) return;
+
+  var timer;
+  var typeIcons = {
+    po:       {icon:'bi-file-earmark-text', bg:'#DEEAF1', color:'#1F4E79'},
+    item:     {icon:'bi-boxes',             bg:'#E2EFDA', color:'#375623'},
+    supplier: {icon:'bi-building',          bg:'#FFF2CC', color:'#7a5200'},
+  };
+
+  inp.addEventListener('input', function() {
+    clearTimeout(timer);
+    var q = inp.value.trim();
+    if (q.length < 2) { drop.classList.remove('show'); drop.innerHTML=''; return; }
+    timer = setTimeout(function() { doSearch(q); }, 250);
+  });
+
+  inp.addEventListener('focus', function() {
+    if (inp.value.trim().length >= 2) drop.classList.add('show');
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!inp.contains(e.target) && !drop.contains(e.target)) {
+      drop.classList.remove('show');
+    }
+  });
+
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { drop.classList.remove('show'); inp.blur(); }
+  });
+
+  function doSearch(q) {
+    fetch('/search?q=' + encodeURIComponent(q))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.results || data.results.length === 0) {
+          drop.innerHTML = '<div style="padding:14px;text-align:center;color:#888;font-size:13px;"><i class="bi bi-search me-2"></i>No results for "' + q + '"</div>';
+          drop.classList.add('show');
+          return;
+        }
+        drop.innerHTML = data.results.map(function(r) {
+          var t = typeIcons[r.type] || {icon:'bi-search', bg:'#f0f0f0', color:'#555'};
+          return '<a href="' + r.url + '" class="search-hit">' +
+            '<div class="search-hit-icon" style="background:' + t.bg + ';color:' + t.color + ';">' +
+              '<i class="bi ' + t.icon + '"></i>' +
+            '</div>' +
+            '<div><div class="search-hit-title">' + r.title + '</div>' +
+            '<div class="search-hit-sub">' + r.subtitle + '</div></div>' +
+          '</a>';
+        }).join('');
+        drop.classList.add('show');
+      })
+      .catch(function() { drop.classList.remove('show'); });
+  }
 })();
 </script>
 </body>

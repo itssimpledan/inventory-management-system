@@ -124,17 +124,35 @@
           {% endif %}
         </td>
         <td>
-          <span class="badge-status
-            {% if po.status == 'Fully Paid – Received' %}s-received
-            {% elif po.status == 'Deposit Paid' %}s-deposit
-            {% elif po.status == 'Approved' %}s-approved
-            {% elif po.status == 'Ops Approved' %}s-ops-approved
-            {% elif po.status == 'Pending Approval' %}s-pending
-            {% elif po.status == 'Fully Paid – Shipped' %}s-shipped
-            {% elif po.status == 'Partially Received' %}s-partial
-            {% elif po.status == 'Cancelled' %}s-cancelled
-            {% elif po.status == 'Returned' %}s-returned
-            {% else %}s-draft{% endif %}">{{ po.status }}</span>
+          {# Progress bar for active workflow statuses; badge for terminal/special #}
+          {% if po.status in ('Cancelled', 'Returned', 'Partially Received', 'Fully Paid – Received') %}
+            <span class="badge-status
+              {% if po.status == 'Fully Paid – Received' %}s-received
+              {% elif po.status == 'Partially Received' %}s-partial
+              {% elif po.status == 'Cancelled' %}s-cancelled
+              {% else %}s-returned{% endif %}"
+              style="font-size:10px;">{{ po.status }}</span>
+          {% else %}
+            {# 5-step pipeline: Draft → Ops Approved → Approved → Deposit/Payment → Shipped #}
+            {% set steps = ['Draft', 'Ops Approved', 'Approved', 'Deposit Paid', 'Fully Paid – Shipped'] %}
+            {% set step_idx = namespace(v=0) %}
+            {% if po.status == 'Draft' %}{% set step_idx.v = 1 %}
+            {% elif po.status == 'Pending Approval' %}{% set step_idx.v = 1 %}
+            {% elif po.status == 'Ops Approved' %}{% set step_idx.v = 2 %}
+            {% elif po.status == 'Approved' %}{% set step_idx.v = 3 %}
+            {% elif po.status == 'Deposit Paid' %}{% set step_idx.v = 4 %}
+            {% elif po.status == 'Fully Paid – Shipped' %}{% set step_idx.v = 5 %}
+            {% endif %}
+            {% set pct = (step_idx.v / 5 * 100) | int %}
+            {% set bar_color = '#1F4E79' if pct < 100 else '#1a7f3c' %}
+            <div style="min-width:100px;">
+              <div style="font-size:10px;color:#555;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ po.status }}</div>
+              <div style="background:#e8e8e8;border-radius:4px;height:5px;overflow:hidden;">
+                <div style="width:{{ pct }}%;height:5px;border-radius:4px;background:{{ bar_color }};transition:.3s;"></div>
+              </div>
+              <div style="font-size:9px;color:#aaa;margin-top:2px;">{{ pct }}%</div>
+            </div>
+          {% endif %}
         </td>
         <td style="white-space:nowrap;">
           {% if po.payment_due_date %}
@@ -169,7 +187,22 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="10" class="text-center text-muted py-4">No purchase orders found.</td></tr>
+      <tr>
+        <td colspan="10" class="py-5 text-center">
+          <div style="color:#ccc;font-size:48px;margin-bottom:12px;"><i class="bi bi-file-earmark-text"></i></div>
+          <div style="font-size:15px;font-weight:600;color:#666;margin-bottom:6px;">No purchase orders found</div>
+          <div style="font-size:13px;color:#aaa;margin-bottom:16px;">
+            {% if status_filter or supplier_filter or item_filter or search_q %}
+              No POs match your current filters. <a href="{{ url_for('po_list') }}" style="color:#2E75B6;">Clear filters</a>
+            {% else %}
+              Get started by creating your first purchase order.
+            {% endif %}
+          </div>
+          {% if session.role in ('admin','ops_planner') %}
+          <a href="{{ url_for('po_new') }}" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>New PO</a>
+          {% endif %}
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

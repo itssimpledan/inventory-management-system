@@ -171,6 +171,48 @@ def dashboard():
     summary = get_wacc_summary(db)
     today   = _d.today().isoformat()
 
+    # ── Greeting ────────────────────────────────────────────────────────────────
+    hour = datetime.now().hour
+    if hour < 12:
+        greeting = "Good morning"
+    elif hour < 17:
+        greeting = "Good afternoon"
+    else:
+        greeting = "Good evening"
+
+    # ── Activity feed (last 8 events across POs + ledger) ──────────────────────
+    activity_feed = []
+    recent_po_activity = db.execute("""
+        SELECT po_number, status, updated_at, supplier_id
+        FROM purchase_orders
+        ORDER BY updated_at DESC LIMIT 4
+    """).fetchall()
+    for p in recent_po_activity:
+        activity_feed.append({
+            "icon":  "bi-file-earmark-text",
+            "color": "#2E75B6",
+            "bg":    "#DEEAF1",
+            "text":  f"PO {p['po_number']} → {p['status']}",
+            "time":  (p["updated_at"] or "")[:16],
+        })
+    recent_ledger = db.execute("""
+        SELECT il.txn_id, il.txn_type, il.txn_date, i.name AS item_name, il.qty_in, il.qty_out
+        FROM inventory_ledger il JOIN items i ON il.item_id = i.item_id
+        ORDER BY il.created_at DESC LIMIT 4
+    """).fetchall()
+    for l in recent_ledger:
+        qty = f"+{l['qty_in']:,.0f}" if (l["qty_in"] or 0) > 0 else f"-{l['qty_out']:,.0f}"
+        activity_feed.append({
+            "icon":  "bi-journal-text",
+            "color": "#375623",
+            "bg":    "#E2EFDA",
+            "text":  f"{l['txn_type']}: {l['item_name']} ({qty})",
+            "time":  l["txn_date"],
+        })
+    # Sort combined feed by time desc and keep top 8
+    activity_feed.sort(key=lambda x: x["time"], reverse=True)
+    activity_feed = activity_feed[:8]
+
     # ── Inventory KPIs ──────────────────────────────────────────────────────
     total_inventory = sum(s["inventory_value"] for s in summary)
 
@@ -297,7 +339,8 @@ def dashboard():
         top5_skus=top5_skus, trend_months=trend_months,
         below_runrate=below_runrate,
         overdue_payment_pos=overdue_payment_pos,
-        overdue_delivery_pos=overdue_delivery_pos)
+        overdue_delivery_pos=overdue_delivery_pos,
+        greeting=greeting, activity_feed=activity_feed)
 
 # ── Notification helper ──────────────────────────────────────────────────────
 def create_po_notification(db, username, po_id, po_number, message, notif_type='info'):
@@ -1266,8 +1309,8 @@ def user_list():
 @roles_required("admin")
 def user_add():
     from werkzeug.security import generate_password_hash
-    f  = request.form
-    db = get_db()
+    f        = request.form
+    db       = get_db()
     username = f["username"].strip().lower()
     # Check for duplicate username
     if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
@@ -1278,6 +1321,20 @@ def user_add():
             "INSERT INTO users (username, password, full_name, role) VALUES (?,?,?,?)",
             (username, generate_password_hash(f["password"]), f["full_name"].strip(), f["role"]))
         db.commit()
+        new_user = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        # Optional profile photo
+        photo_file = request.files.get("photo")
+        if photo_file and photo_file.filename:
+            import os, uuid
+            from werkzeug.utils import secure_filename
+            ext = os.path.splitext(secure_filename(photo_file.filename))[1].lower()
+            if ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+                upload_dir = os.path.join(app.root_path, "static", "uploads", "profiles")
+                os.makedirs(upload_dir, exist_ok=True)
+                fname = f"user_{new_user['id']}_{uuid.uuid4().hex[:8]}{ext}"
+                photo_file.save(os.path.join(upload_dir, fname))
+                db.execute("UPDATE users SET profile_photo=? WHERE id=?", (fname, new_user["id"]))
+                db.commit()
         flash(f"User '{f['full_name']}' added successfully.", "success")
     except Exception as e:
         flash(f"Error adding user: {e}", "danger")
@@ -1422,6 +1479,78 @@ def user_photo_delete(user_id):
         flash("Profile photo removed.", "success")
     return redirect(url_for("user_list"))
 
+
+
+# ── SELF-SERVICE PROFILE ─────────────────────────────────────────────────────
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def user_profile():
+    db   = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    if request.method == "POST":
+        action = request.form.get("action", "details")
+        if action == "details":
+            # Update full name
+            new_name = request.form.get("full_name", "").strip()
+            if new_name:
+                db.execute("UPDATE users SET full_name=? WHERE id=?", (new_name, session["user_id"]))
+                db.commit()
+                session["full_name"] = new_name
+                flash("Name updated successfully.", "success")
+            else:
+                flash("Full name cannot be empty.", "danger")
+        elif action == "password":
+            from werkzeug.security import check_password_hash, generate_password_hash
+            old_pw  = request.form.get("old_password", "")
+            new_pw  = request.form.get("new_password", "")
+            conf_pw = request.form.get("confirm_password", "")
+            if not check_password_hash(user["password"], old_pw):
+                flash("Current password is incorrect.", "danger")
+            elif len(new_pw) < 6:
+                flash("New password must be at least 6 characters.", "danger")
+            elif new_pw != conf_pw:
+                flash("New passwords do not match.", "danger")
+            else:
+                db.execute("UPDATE users SET password=? WHERE id=?",
+                           (generate_password_hash(new_pw), session["user_id"]))
+                db.commit()
+                flash("Password changed successfully.", "success")
+        elif action == "photo":
+            photo_file = request.files.get("photo")
+            if photo_file and photo_file.filename:
+                import os as _op, uuid
+                from werkzeug.utils import secure_filename
+                ext = _op.path.splitext(secure_filename(photo_file.filename))[1].lower()
+                if ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+                    flash("Unsupported file type. Use JPG, PNG, GIF or WebP.", "danger")
+                else:
+                    upload_dir = _op.path.join(app.root_path, "static", "uploads", "profiles")
+                    _op.makedirs(upload_dir, exist_ok=True)
+                    # Remove old photo
+                    if user["profile_photo"]:
+                        old = _op.path.join(upload_dir, user["profile_photo"])
+                        if _op.path.exists(old): _op.remove(old)
+                    fname = f"user_{session['user_id']}_{uuid.uuid4().hex[:8]}{ext}"
+                    photo_file.save(_op.path.join(upload_dir, fname))
+                    db.execute("UPDATE users SET profile_photo=? WHERE id=?", (fname, session["user_id"]))
+                    db.commit()
+                    session["profile_photo"] = fname
+                    flash("Profile photo updated.", "success")
+            else:
+                flash("No file selected.", "warning")
+        elif action == "delete_photo":
+            if user["profile_photo"]:
+                import os as _op2
+                old = _op2.path.join(app.root_path, "static", "uploads", "profiles", user["profile_photo"])
+                if _op2.path.exists(old): _op2.remove(old)
+                db.execute("UPDATE users SET profile_photo=NULL WHERE id=?", (session["user_id"],))
+                db.commit()
+                session.pop("profile_photo", None)
+                flash("Profile photo removed.", "success")
+        return redirect(url_for("user_profile"))
+    # Reload after any commit
+    user = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    return render_template("profile.html", user=user)
 
 
 # ── APPROVALS DASHBOARD ───────────────────────────────────────────────────────
@@ -3043,6 +3172,98 @@ def date_filter(v):
         return datetime.strptime(v, "%Y-%m-%d").strftime("%d %b %Y")
     except:
         return v
+
+
+# ── GLOBAL SEARCH ─────────────────────────────────────────────────────────────
+@app.route("/search")
+@login_required
+def global_search():
+    from flask import jsonify
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify(results=[])
+    db      = get_db()
+    results = []
+    like    = f"%{q}%"
+    # Search POs
+    pos = db.execute("""
+        SELECT po.id, po.po_number, po.status, s.name AS supplier_name
+        FROM purchase_orders po
+        JOIN suppliers s ON po.supplier_id = s.supplier_id
+        WHERE po.po_number LIKE ? OR s.name LIKE ?
+        LIMIT 5
+    """, (like, like)).fetchall()
+    for p in pos:
+        results.append({
+            "type":     "po",
+            "title":    p["po_number"],
+            "subtitle": f"{p['supplier_name']} · {p['status']}",
+            "url":      f"/po/{p['id']}",
+        })
+    # Search items
+    items = db.execute("""
+        SELECT item_id, name, category FROM items
+        WHERE item_id LIKE ? OR name LIKE ? OR description LIKE ?
+        LIMIT 5
+    """, (like, like, like)).fetchall()
+    for i in items:
+        results.append({
+            "type":     "item",
+            "title":    i["name"],
+            "subtitle": f"{i['item_id']} · {i['category'] or ''}",
+            "url":      "/items",
+        })
+    # Search suppliers
+    suppliers = db.execute("""
+        SELECT supplier_id, name, contact_name FROM suppliers
+        WHERE supplier_id LIKE ? OR name LIKE ? OR contact_name LIKE ?
+        LIMIT 5
+    """, (like, like, like)).fetchall()
+    for s in suppliers:
+        results.append({
+            "type":     "supplier",
+            "title":    s["name"],
+            "subtitle": f"{s['supplier_id']} · {s['contact_name'] or ''}",
+            "url":      f"/suppliers/{s['supplier_id']}",
+        })
+    return jsonify(results=results[:12])
+
+
+# ── BREADCRUMB CONTEXT PROCESSOR ──────────────────────────────────────────────
+_BREADCRUMB_MAP = {
+    "dashboard":                [("Home", "/")],
+    "po_list":                  [("Home", "/"), ("Purchase Orders", None)],
+    "po_new":                   [("Home", "/"), ("Purchase Orders", "/pos"), ("New PO", None)],
+    "po_detail":                [("Home", "/"), ("Purchase Orders", "/pos"), ("PO Detail", None)],
+    "ledger":                   [("Home", "/"), ("Inventory Ledger", None)],
+    "ledger_new":               [("Home", "/"), ("Inventory Ledger", "/ledger"), ("Log Movement", None)],
+    "item_list":                [("Home", "/"), ("Items / SKUs", None)],
+    "supplier_list":            [("Home", "/"), ("Suppliers", None)],
+    "supplier_detail":          [("Home", "/"), ("Suppliers", "/suppliers"), ("Supplier Detail", None)],
+    "supplier_request_new":     [("Home", "/"), ("Suppliers", "/suppliers"), ("New Request", None)],
+    "supplier_request_detail":  [("Home", "/"), ("Suppliers", "/suppliers"), ("Request Detail", None)],
+    "bundle_list":              [("Home", "/"), ("Bundles / Kits", None)],
+    "finance_summary":          [("Home", "/"), ("Finance", None), ("AP Summary", None)],
+    "sales_list":               [("Home", "/"), ("Finance", None), ("Sales Uploads", None)],
+    "sales_upload":             [("Home", "/"), ("Finance", None), ("Sales Uploads", "/sales"), ("Upload", None)],
+    "sales_detail":             [("Home", "/"), ("Finance", None), ("Sales Uploads", "/sales"), ("Detail", None)],
+    "sales_report":             [("Home", "/"), ("Finance", None), ("Sales Report", None)],
+    "mec_dashboard":            [("Home", "/"), ("Month-End Close", None)],
+    "mec_stockcount_new":       [("Home", "/"), ("Inventory Ledger", "/ledger"), ("Upload Physical Count", None)],
+    "delivery_calendar":        [("Home", "/"), ("Purchasing", None), ("Delivery Calendar", None)],
+    "runout_estimator":         [("Home", "/"), ("Purchasing", None), ("Demand Planning", None)],
+    "user_list":                [("Home", "/"), ("Settings", None), ("Users", None)],
+    "user_profile":             [("Home", "/"), ("My Profile", None)],
+    "company_settings":         [("Home", "/"), ("Settings", None), ("Company", None)],
+    "approvals":                [("Home", "/"), ("Approvals", None)],
+    "templates_page":           [("Home", "/"), ("Master Data", None), ("Download Templates", None)],
+}
+
+@app.context_processor
+def inject_breadcrumbs():
+    ep    = request.endpoint or ""
+    crumbs = _BREADCRUMB_MAP.get(ep, [])
+    return {"breadcrumbs": crumbs}
 
 
 # ── BUNDLES ───────────────────────────────────────────────────────────────────

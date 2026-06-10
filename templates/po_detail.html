@@ -3,6 +3,20 @@
 {% block page_title %}
   <i class="bi bi-file-earmark-text me-2" style="color:#2E75B6"></i>{{ po.po_number }}
 {% endblock %}
+{% block head %}
+<style>
+@media print {
+  #sidebar, .topbar, footer, .btn, .alert, form.d-inline,
+  .flash-messages, .no-print { display: none !important; }
+  #main { margin-left: 0 !important; }
+  body { background: #fff !important; color: #000 !important; font-size: 12px; }
+  .form-card, .ims-table { border: 1px solid #ccc !important; box-shadow: none !important; }
+  a { color: #000 !important; text-decoration: none !important; }
+  .kpi-card { border: 1px solid #ccc !important; }
+}
+</style>
+{% endblock %}
+
 {% block topbar_actions %}
   {% if request.args.get('ref') == 'calendar' %}
   <a href="{{ url_for('delivery_calendar') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Calendar</a>
@@ -33,6 +47,10 @@
     </span>
   </div>
   {% endif %}
+  <!-- Print button -->
+  <button onclick="window.print()" class="btn btn-sm btn-outline-secondary ms-1" title="Print this PO">
+    <i class="bi bi-printer me-1"></i>Print
+  </button>
 {% endblock %}
 
 {% block content %}

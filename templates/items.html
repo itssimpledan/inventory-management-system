@@ -118,7 +118,20 @@
       </tr>
       {% endfor %}
       {% if not items %}
-      <tr><td colspan="9" class="text-center text-muted py-4">No items yet. Click <strong>Add Item</strong> to create your first SKU.</td></tr>
+      <tr>
+        <td colspan="9" class="py-5 text-center">
+          <div style="color:#ccc;font-size:48px;margin-bottom:12px;"><i class="bi bi-boxes"></i></div>
+          <div style="font-size:15px;font-weight:600;color:#666;margin-bottom:6px;">No items / SKUs found</div>
+          <div style="font-size:13px;color:#aaa;margin-bottom:16px;">
+            Start building your product catalogue.
+          </div>
+          {% if can_manage %}
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
+            <i class="bi bi-plus-circle me-1"></i>Add Item
+          </button>
+          {% endif %}
+        </td>
+      </tr>
       {% endif %}
     </tbody>
   </table>

@@ -162,12 +162,27 @@
 <div class="modal fade" id="addUserModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="POST" action="{{ url_for('user_add') }}">
+      <form method="POST" action="{{ url_for('user_add') }}" enctype="multipart/form-data">
         <div class="modal-header" style="background:#1F4E79;">
           <h5 class="modal-title text-white"><i class="bi bi-person-plus me-2"></i>Add New User</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          {# Profile photo preview + upload #}
+          <div class="mb-3 text-center">
+            <div id="addUserAvatarWrap" style="display:inline-block;position:relative;cursor:pointer;" onclick="document.getElementById('addUserPhoto').click()">
+              <div id="addUserAvatarPreview"
+                   style="width:72px;height:72px;border-radius:50%;background:#DEEAF1;display:flex;align-items:center;justify-content:center;font-size:28px;color:#1F4E79;border:2px dashed #b0c9df;margin:0 auto;">
+                <i class="bi bi-person"></i>
+              </div>
+              <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;background:#2E75B6;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                <i class="bi bi-camera-fill" style="font-size:10px;color:#fff;"></i>
+              </div>
+            </div>
+            <input type="file" id="addUserPhoto" name="photo" accept="image/*" class="d-none"
+                   onchange="previewAddUserPhoto(this)">
+            <div class="mt-1" style="font-size:11px;color:#aaa;">Optional — click avatar to upload photo</div>
+          </div>
           <div class="mb-3">
             <label class="form-label fw-600">Full Name <span class="text-danger">*</span></label>
             <input type="text" name="full_name" class="form-control" placeholder="e.g. Jane Smith" required>
@@ -289,6 +304,22 @@
 
 {% block scripts %}
 <script>
+function previewAddUserPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wrap = document.getElementById('addUserAvatarPreview');
+    wrap.innerHTML = '';
+    wrap.style.background = 'transparent';
+    wrap.style.border = 'none';
+    const img = document.createElement('img');
+    img.src = e.target.result;
+    img.style.cssText = 'width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #DEEAF1;';
+    wrap.appendChild(img);
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
 const editModal = document.getElementById('editUserModal')
 editModal.addEventListener('show.bs.modal', e => {
   const btn = e.relatedTarget

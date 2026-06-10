@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block page_title %}<i class="bi bi-person-circle me-2" style="color:#2E75B6"></i>My Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7 col-xl-6">
+
+    <!-- ── Profile Header Card ──────────────────────────────────── -->
+    <div class="form-card mb-4 text-center" style="padding:32px 24px;">
+      <div style="position:relative;display:inline-block;margin-bottom:16px;">
+        {% if user.profile_photo %}
+        <img src="{{ url_for('static', filename='uploads/profiles/' + user.profile_photo) }}"
+             alt="{{ user.full_name }}"
+             style="width:88px;height:88px;border-radius:50%;object-fit:cover;border:3px solid #DEEAF1;">
+        {% else %}
+        <div style="width:88px;height:88px;background:#DEEAF1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;color:#1F4E79;font-weight:700;">
+          {{ user.full_name[0].upper() }}
+        </div>
+        {% endif %}
+        <!-- Camera icon to trigger photo upload -->
+        <label for="profilePhotoInput" title="Change photo"
+               style="position:absolute;bottom:2px;right:2px;width:26px;height:26px;background:#2E75B6;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;">
+          <i class="bi bi-camera-fill" style="font-size:11px;color:#fff;"></i>
+        </label>
+      </div>
+      <h5 style="color:#1F4E79;font-weight:700;margin-bottom:2px;">{{ user.full_name }}</h5>
+      <div style="font-size:13px;color:#888;">
+        <i class="bi bi-person me-1"></i>{{ user.username }}
+        &nbsp;·&nbsp;
+        <span class="badge" style="background:#DEEAF1;color:#1F4E79;font-size:11px;">{{ user.role | replace('_',' ') | title }}</span>
+      </div>
+
+      <!-- Photo upload form (hidden, triggered by camera icon) -->
+      <form id="profilePhotoForm" method="POST" action="{{ url_for('user_profile') }}" enctype="multipart/form-data" class="d-none">
+        <input type="hidden" name="action" value="photo">
+        <input type="file" id="profilePhotoInput" name="photo" accept="image/*"
+               onchange="document.getElementById('profilePhotoForm').submit();">
+      </form>
+
+      {% if user.profile_photo %}
+      <form method="POST" action="{{ url_for('user_profile') }}" class="d-inline mt-2">
+        <input type="hidden" name="action" value="delete_photo">
+        <button type="submit" class="btn btn-sm btn-outline-danger mt-2" style="font-size:11px;"
+                onclick="return confirm('Remove profile photo?')">
+          <i class="bi bi-trash me-1"></i>Remove Photo
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- ── Update Full Name ──────────────────────────────────────── -->
+    <div class="form-card mb-4">
+      <div class="form-section-title"><i class="bi bi-pencil me-2"></i>Personal Details</div>
+      <form method="POST" action="{{ url_for('user_profile') }}">
+        <input type="hidden" name="action" value="details">
+        <div class="mb-3">
+          <label class="form-label" style="font-size:13px;font-weight:600;">Full Name</label>
+          <input type="text" name="full_name" class="form-control" value="{{ user.full_name }}" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" style="font-size:13px;font-weight:600;">Username</label>
+          <input type="text" class="form-control" value="{{ user.username }}" disabled>
+          <small class="text-muted">Username cannot be changed. Contact an admin if needed.</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" style="font-size:13px;font-weight:600;">Role</label>
+          <input type="text" class="form-control" value="{{ user.role | replace('_',' ') | title }}" disabled>
+          <small class="text-muted">Role is assigned by an admin.</small>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check2 me-1"></i>Save Name
+        </button>
+      </form>
+    </div>
+
+    <!-- ── Change Password ───────────────────────────────────────── -->
+    <div class="form-card mb-4">
+      <div class="form-section-title"><i class="bi bi-lock me-2"></i>Change Password</div>
+      <form method="POST" action="{{ url_for('user_profile') }}" id="pwForm">
+        <input type="hidden" name="action" value="password">
+        <div class="mb-3">
+          <label class="form-label" style="font-size:13px;font-weight:600;">Current Password <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="password" name="old_password" id="oldPw" class="form-control" placeholder="Enter your current password" required>
+            <button type="button" class="btn btn-outline-secondary" onclick="togglePw('oldPw',this)" tabindex="-1">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" style="font-size:13px;font-weight:600;">New Password <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="password" name="new_password" id="newPw" class="form-control" placeholder="Minimum 6 characters" required minlength="6">
+            <button type="button" class="btn btn-outline-secondary" onclick="togglePw('newPw',this)" tabindex="-1">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" style="font-size:13px;font-weight:600;">Confirm New Password <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="password" name="confirm_password" id="confPw" class="form-control" placeholder="Repeat new password" required minlength="6">
+            <button type="button" class="btn btn-outline-secondary" onclick="togglePw('confPw',this)" tabindex="-1">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+          <div id="pwMatchHint" class="mt-1" style="font-size:12px;"></div>
+        </div>
+        <button type="submit" class="btn btn-warning" style="color:#7a5200;">
+          <i class="bi bi-lock me-1"></i>Change Password
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw(id, btn) {
+  const inp = document.getElementById(id);
+  const showing = inp.type === 'text';
+  inp.type = showing ? 'password' : 'text';
+  btn.querySelector('i').className = showing ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+
+// Live password match indicator
+document.getElementById('confPw').addEventListener('input', function() {
+  const newPw  = document.getElementById('newPw').value;
+  const hint   = document.getElementById('pwMatchHint');
+  if (!this.value) { hint.textContent = ''; return; }
+  if (this.value === newPw) {
+    hint.innerHTML = '<span style="color:#1a7f3c;"><i class="bi bi-check-circle-fill me-1"></i>Passwords match</span>';
+  } else {
+    hint.innerHTML = '<span style="color:#dc3545;"><i class="bi bi-x-circle-fill me-1"></i>Passwords do not match</span>';
+  }
+});
+
+// Client-side confirm check before submit
+document.getElementById('pwForm').addEventListener('submit', function(e) {
+  const newPw  = document.getElementById('newPw').value;
+  const confPw = document.getElementById('confPw').value;
+  if (newPw !== confPw) {
+    e.preventDefault();
+    alert('New passwords do not match. Please re-enter.');
+  }
+});
+</script>
+{% endblock %}
