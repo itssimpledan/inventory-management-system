@@ -30,10 +30,24 @@
   }
   #sidebar .brand h5 { color:#fff; font-weight:700; margin:0; font-size:15px; }
   #sidebar .brand small { color:rgba(255,255,255,.6); font-size:11px; }
-  #sidebar .nav-section {
-    padding: 12px 16px 4px; color:rgba(255,255,255,.4);
-    font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  /* Collapsible nav sections */
+  .nav-section-toggle {
+    padding: 10px 16px 4px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none; border-radius: 4px;
+    transition: background .15s;
   }
+  .nav-section-toggle:hover { background: rgba(255,255,255,.06); }
+  .nav-section-label {
+    color: rgba(255,255,255,.4);
+    font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .nav-section-caret {
+    color: rgba(255,255,255,.3); font-size: 11px;
+    transition: transform .2s;
+  }
+  .nav-section-toggle.collapsed .nav-section-caret { transform: rotate(-90deg); }
+  .nav-section-body { overflow: hidden; transition: max-height .25s ease; }
   #sidebar .nav-link {
     color:rgba(255,255,255,.75); padding:9px 16px; border-radius:6px;
     margin:1px 8px; font-size:13px; display:flex; align-items:center; gap:10px;
@@ -165,124 +179,195 @@
     </div>
   </div>
 
-  <div class="mt-2">
-    <div class="nav-section">Main</div>
-    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
-      <i class="bi bi-speedometer2"></i> Dashboard
-    </a>
-    {% if session.role in ('admin','ops_manager','finance_manager') %}
-    <a href="{{ url_for('approvals') }}" class="nav-link {% if request.endpoint=='approvals' %}active{% endif %}"
-       style="display:flex;align-items:center;justify-content:space-between;">
-      <span><i class="bi bi-check2-all me-2"></i>Approvals</span>
-      {% if pending_count %}
-      <span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;">
-        {{ pending_count }}
-      </span>
+  {# Helper: determine if a section should start expanded #}
+  {# We expand any section that has the active page in it #}
+  {% set ep = request.endpoint %}
+  {% set main_active    = ep in ('dashboard','approvals') %}
+  {% set purch_active   = ep in ('po_list','po_detail','po_new','delivery_calendar','runout_estimator') %}
+  {% set inv_active     = ep in ('ledger','ledger_new','mec_stockcount_new','mec_stockcount_detail') %}
+  {% set mec_active     = ep in ('mec_dashboard','mec_stockcount_new','mec_stockcount_detail','mec_stockcount_approve','mec_reconciliation','mec_close_period') %}
+  {% set fin_active     = ep in ('finance_summary','sales_list','sales_upload','sales_detail','sales_report') %}
+  {% set master_active  = ep in ('supplier_list','supplier_detail','supplier_request_new','supplier_request_detail','item_list','items_import','bundle_list','bundle_add','bundle_edit','bundles_import','supplier_import','templates_page','template_download') %}
+  {% set settings_active = ep in ('user_list','company_settings') %}
+
+  <div class="mt-2" id="sidebarNav">
+
+    {# ── MAIN ── #}
+    <div class="nav-section-toggle {% if not main_active %}collapsed{% endif %}" data-target="sec-main">
+      <span class="nav-section-label">Main</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-main">
+      <a href="{{ url_for('dashboard') }}" class="nav-link {% if ep=='dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
+      {% if session.role in ('admin','ops_manager','finance_manager') %}
+      <a href="{{ url_for('approvals') }}" class="nav-link {% if ep=='approvals' %}active{% endif %}"
+         style="justify-content:space-between;">
+        <span><i class="bi bi-check2-all me-2"></i>Approvals</span>
+        {% if pending_count %}
+        <span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;">{{ pending_count }}</span>
+        {% endif %}
+      </a>
       {% endif %}
-    </a>
-    {% endif %}
+    </div>
 
-    <div class="nav-section">Purchasing</div>
-    <a href="{{ url_for('po_list') }}" class="nav-link {% if request.endpoint in ('po_list','po_detail','po_new') %}active{% endif %}">
-      <i class="bi bi-file-earmark-text"></i> Purchase Orders
-    </a>
-    {% if session.role in ('admin','ops_planner') %}
-    <a href="{{ url_for('po_new') }}" class="nav-link {% if request.endpoint=='po_new' %}active{% endif %}">
-      <i class="bi bi-plus-circle"></i> New PO
-    </a>
-    {% endif %}
-    {% if session.role in ('admin','ops_planner','ops_manager') %}
-    <a href="{{ url_for('delivery_calendar') }}" class="nav-link {% if request.endpoint=='delivery_calendar' %}active{% endif %}">
-      <i class="bi bi-calendar3"></i> Delivery Calendar
-    </a>
-    <a href="{{ url_for('runout_estimator') }}" class="nav-link {% if request.endpoint=='runout_estimator' %}active{% endif %}">
-      <i class="bi bi-bar-chart-line"></i> Demand Planning
-    </a>
-    {% endif %}
+    {# ── PURCHASING ── #}
+    <div class="nav-section-toggle {% if not purch_active %}collapsed{% endif %}" data-target="sec-purchasing">
+      <span class="nav-section-label">Purchasing</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-purchasing">
+      <a href="{{ url_for('po_list') }}" class="nav-link {% if ep in ('po_list','po_detail','po_new') %}active{% endif %}">
+        <i class="bi bi-file-earmark-text"></i> Purchase Orders
+      </a>
+      {% if session.role in ('admin','ops_planner') %}
+      <a href="{{ url_for('po_new') }}" class="nav-link {% if ep=='po_new' %}active{% endif %}">
+        <i class="bi bi-plus-circle"></i> New PO
+      </a>
+      {% endif %}
+      {% if session.role in ('admin','ops_planner','ops_manager') %}
+      <a href="{{ url_for('delivery_calendar') }}" class="nav-link {% if ep=='delivery_calendar' %}active{% endif %}">
+        <i class="bi bi-calendar3"></i> Delivery Calendar
+      </a>
+      <a href="{{ url_for('runout_estimator') }}" class="nav-link {% if ep=='runout_estimator' %}active{% endif %}">
+        <i class="bi bi-bar-chart-line"></i> Demand Planning
+      </a>
+      {% endif %}
+    </div>
 
-    <div class="nav-section">Inventory</div>
-    <a href="{{ url_for('ledger') }}" class="nav-link {% if request.endpoint in ('ledger','ledger_new') %}active{% endif %}">
-      <i class="bi bi-journal-text"></i> Inventory Ledger
-    </a>
-    {% if session.role in ('admin','ops_exec') %}
-    <a href="{{ url_for('ledger_new') }}" class="nav-link {% if request.endpoint=='ledger_new' %}active{% endif %}">
-      <i class="bi bi-plus-circle"></i> Log Movement
-    </a>
-    {% endif %}
+    {# ── INVENTORY ── #}
+    <div class="nav-section-toggle {% if not inv_active %}collapsed{% endif %}" data-target="sec-inventory">
+      <span class="nav-section-label">Inventory</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-inventory">
+      <a href="{{ url_for('ledger') }}" class="nav-link {% if ep in ('ledger','ledger_new') %}active{% endif %}">
+        <i class="bi bi-journal-text"></i> Inventory Ledger
+      </a>
+      {% if session.role in ('admin','ops_exec') %}
+      <a href="{{ url_for('ledger_new') }}" class="nav-link {% if ep=='ledger_new' %}active{% endif %}">
+        <i class="bi bi-plus-circle"></i> Log Movement
+      </a>
+      {% endif %}
+      {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
+      <a href="{{ url_for('mec_stockcount_new') }}" class="nav-link {% if ep in ('mec_stockcount_new','mec_stockcount_detail') %}active{% endif %}">
+        <i class="bi bi-clipboard2-check"></i> Upload Physical Count
+      </a>
+      {% endif %}
+    </div>
+
+    {# ── MONTH-END CLOSE ── #}
     {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
-    <a href="{{ url_for('mec_stockcount_new') }}" class="nav-link {% if request.endpoint in ('mec_stockcount_new','mec_stockcount_detail') %}active{% endif %}">
-      <i class="bi bi-clipboard2-check"></i> Upload Physical Count
-    </a>
-    {% endif %}
-    {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
-    <div class="nav-section">Month-End Close</div>
-    <a href="{{ url_for('mec_dashboard') }}" class="nav-link {% if request.endpoint in ('mec_dashboard','mec_stockcount_new','mec_stockcount_detail','mec_stockcount_approve','mec_reconciliation','mec_close_period') %}active{% endif %}">
-      <i class="bi bi-calendar-check"></i> MEC Dashboard
-    </a>
+    <div class="nav-section-toggle {% if not mec_active %}collapsed{% endif %}" data-target="sec-mec">
+      <span class="nav-section-label">Month-End Close</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-mec">
+      <a href="{{ url_for('mec_dashboard') }}" class="nav-link {% if ep in ('mec_dashboard','mec_stockcount_approve','mec_reconciliation','mec_close_period') %}active{% endif %}">
+        <i class="bi bi-calendar-check"></i> MEC Dashboard
+      </a>
+    </div>
     {% endif %}
 
+    {# ── FINANCE ── #}
     {% if session.role in ('admin','finance_manager','finance_exec') %}
-    <div class="nav-section">Finance</div>
-    <a href="{{ url_for('finance_summary') }}" class="nav-link {% if request.endpoint == 'finance_summary' %}active{% endif %}">
-      <i class="bi bi-journal-bookmark"></i> AP Summary
-    </a>
-    <a href="{{ url_for('sales_list') }}" class="nav-link {% if request.endpoint in ('sales_list','sales_upload','sales_detail') %}active{% endif %}">
-      <i class="bi bi-graph-up-arrow"></i> Sales Uploads
-    </a>
-    <a href="{{ url_for('sales_report') }}" class="nav-link {% if request.endpoint == 'sales_report' %}active{% endif %}">
-      <i class="bi bi-bar-chart-line"></i> Sales Report
-    </a>
+    <div class="nav-section-toggle {% if not fin_active %}collapsed{% endif %}" data-target="sec-finance">
+      <span class="nav-section-label">Finance</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-finance">
+      <a href="{{ url_for('finance_summary') }}" class="nav-link {% if ep=='finance_summary' %}active{% endif %}">
+        <i class="bi bi-journal-bookmark"></i> AP Summary
+      </a>
+      <a href="{{ url_for('sales_list') }}" class="nav-link {% if ep in ('sales_list','sales_upload','sales_detail') %}active{% endif %}">
+        <i class="bi bi-graph-up-arrow"></i> Sales Uploads
+      </a>
+      <a href="{{ url_for('sales_report') }}" class="nav-link {% if ep=='sales_report' %}active{% endif %}">
+        <i class="bi bi-bar-chart-line"></i> Sales Report
+      </a>
+    </div>
     {% endif %}
 
-    <div class="nav-section">Master Data</div>
-    <a href="{{ url_for('supplier_list') }}" class="nav-link {% if request.endpoint in ('supplier_list','supplier_detail','supplier_request_new','supplier_request_detail') %}active{% endif %}">
-      <i class="bi bi-building"></i> Suppliers
-    </a>
-    <a href="{{ url_for('item_list') }}" class="nav-link {% if request.endpoint in ('item_list','items_import') %}active{% endif %}">
-      <i class="bi bi-boxes"></i> Items / SKUs
-    </a>
-    {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
-    <a href="{{ url_for('bundle_list') }}" class="nav-link {% if request.endpoint in ('bundle_list','bundle_add','bundle_edit','bundles_import') %}active{% endif %}">
-      <i class="bi bi-collection"></i> Bundles / Kits
-    </a>
-    {% endif %}
+    {# ── MASTER DATA ── #}
+    <div class="nav-section-toggle {% if not master_active %}collapsed{% endif %}" data-target="sec-master">
+      <span class="nav-section-label">Master Data</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-master">
+      <a href="{{ url_for('supplier_list') }}" class="nav-link {% if ep in ('supplier_list','supplier_detail','supplier_request_new','supplier_request_detail') %}active{% endif %}">
+        <i class="bi bi-building"></i> Suppliers
+      </a>
+      <a href="{{ url_for('item_list') }}" class="nav-link {% if ep in ('item_list','items_import') %}active{% endif %}">
+        <i class="bi bi-boxes"></i> Items / SKUs
+      </a>
+      {% if session.role in ('admin','ops_manager','ops_planner','ops_exec','finance_manager','finance_exec') %}
+      <a href="{{ url_for('bundle_list') }}" class="nav-link {% if ep in ('bundle_list','bundle_add','bundle_edit','bundles_import') %}active{% endif %}">
+        <i class="bi bi-collection"></i> Bundles / Kits
+      </a>
+      {% endif %}
+      {% if session.role == 'admin' %}
+      <a href="{{ url_for('supplier_import') }}" class="nav-link {% if ep=='supplier_import' %}active{% endif %}">
+        <i class="bi bi-cloud-upload"></i> Import Suppliers
+      </a>
+      <a href="{{ url_for('items_import') }}" class="nav-link {% if ep=='items_import' %}active{% endif %}">
+        <i class="bi bi-cloud-upload"></i> Import Items / SKUs
+      </a>
+      <a href="{{ url_for('bundles_import') }}" class="nav-link {% if ep=='bundles_import' %}active{% endif %}">
+        <i class="bi bi-cloud-upload"></i> Import Bundles
+      </a>
+      {% endif %}
+      <a href="{{ url_for('templates_page') }}" class="nav-link {% if ep in ('templates_page','template_download') %}active{% endif %}">
+        <i class="bi bi-file-earmark-arrow-down"></i> Download Templates
+      </a>
+    </div>
+
+    {# ── SETTINGS ── #}
     {% if session.role == 'admin' %}
-    <a href="{{ url_for('supplier_import') }}" class="nav-link {% if request.endpoint == 'supplier_import' %}active{% endif %}">
-      <i class="bi bi-cloud-upload"></i> Import Suppliers
-    </a>
-    <a href="{{ url_for('items_import') }}" class="nav-link {% if request.endpoint == 'items_import' %}active{% endif %}">
-      <i class="bi bi-cloud-upload"></i> Import Items / SKUs
-    </a>
-    <a href="{{ url_for('bundles_import') }}" class="nav-link {% if request.endpoint == 'bundles_import' %}active{% endif %}">
-      <i class="bi bi-cloud-upload"></i> Import Bundles
-    </a>
+    <div class="nav-section-toggle {% if not settings_active %}collapsed{% endif %}" data-target="sec-settings">
+      <span class="nav-section-label">Settings</span>
+      <i class="bi bi-chevron-down nav-section-caret"></i>
+    </div>
+    <div class="nav-section-body" id="sec-settings">
+      <a href="{{ url_for('user_list') }}" class="nav-link {% if ep=='user_list' %}active{% endif %}">
+        <i class="bi bi-people"></i> Manage Users
+      </a>
+      <a href="{{ url_for('company_settings') }}" class="nav-link {% if ep=='company_settings' %}active{% endif %}">
+        <i class="bi bi-building"></i> Company Settings
+      </a>
+    </div>
     {% endif %}
 
-    <a href="{{ url_for('templates_page') }}" class="nav-link {% if request.endpoint in ('templates_page','template_download') %}active{% endif %}">
-      <i class="bi bi-file-earmark-arrow-down"></i> Download Templates
-    </a>
-
-    {% if session.role == 'admin' %}
-    <div class="nav-section">Settings</div>
-    <a href="{{ url_for('user_list') }}" class="nav-link {% if request.endpoint == 'user_list' %}active{% endif %}">
-      <i class="bi bi-people"></i> Manage Users
-    </a>
-    <a href="{{ url_for('company_settings') }}" class="nav-link {% if request.endpoint == 'company_settings' %}active{% endif %}">
-      <i class="bi bi-building"></i> Company Settings
-    </a>
-    {% endif %}
   </div>
 
   <div class="user-card">
     <div class="d-flex align-items-center gap-2">
-      <div style="width:32px;height:32px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:700;">
-        {{ session.full_name[0].upper() }}
+      {# Profile photo or initials avatar #}
+      <div style="position:relative;flex-shrink:0;" class="user-avatar-wrap">
+        {% if session.profile_photo %}
+        <img src="{{ url_for('static', filename='uploads/profiles/' + session.profile_photo) }}"
+             alt="{{ session.full_name }}"
+             style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.3);">
+        {% else %}
+        <div style="width:36px;height:36px;background:rgba(255,255,255,.18);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:700;border:2px solid rgba(255,255,255,.15);">
+          {{ session.full_name[0].upper() }}
+        </div>
+        {% endif %}
+        {# Hidden photo upload trigger #}
+        <label for="sidebarPhotoInput" title="Change photo"
+               style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;background:#2E75B6;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(255,255,255,.4);">
+          <i class="bi bi-camera-fill" style="font-size:8px;color:#fff;"></i>
+        </label>
+        <form id="sidebarPhotoForm" action="{{ url_for('user_photo_upload', user_id=session.user_id) }}" method="POST" enctype="multipart/form-data" style="display:none;">
+          <input type="file" id="sidebarPhotoInput" name="photo" accept="image/*"
+                 onchange="document.getElementById('sidebarPhotoForm').submit();">
+        </form>
       </div>
-      <div>
-        <div class="name">{{ session.full_name }}</div>
+      <div style="min-width:0;">
+        <div class="name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ session.full_name }}</div>
         <div class="role role-{{ session.role }}">
           <i class="bi bi-shield-check"></i>
-          {{ session.role | title }}
+          {{ session.role | replace('_',' ') | title }}
         </div>
       </div>
     </div>
@@ -365,6 +450,19 @@
 
     {% block content %}{% endblock %}
   </div>
+
+  <!-- ── FOOTER ───────────────────────────────────────────────────────────── -->
+  <footer style="border-top:1px solid #e8e8e8;background:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <span style="font-size:11px;color:#aaa;">
+      &copy; {{ now.year }} {{ company_name }} &mdash; Inventory Management System.
+      Built with <i class="bi bi-heart-fill" style="color:#e74c3c;font-size:10px;"></i> for operational excellence.
+    </span>
+    <span style="font-size:11px;color:#ccc;">
+      <i class="bi bi-shield-lock me-1"></i>Secure &nbsp;&middot;&nbsp;
+      <i class="bi bi-clock me-1"></i>{{ now.strftime('%d %b %Y') }} &nbsp;&middot;&nbsp;
+      v1.0
+    </span>
+  </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
@@ -445,5 +543,68 @@
 </script>
 
 {% block scripts %}{% endblock %}
+
+<script>
+// ── Collapsible sidebar sections ──────────────────────────────────────────────
+(function () {
+  var STORAGE_KEY = 'ims_nav_state';
+
+  function getState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) { return {}; }
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var toggles = document.querySelectorAll('.nav-section-toggle');
+    var state   = getState();
+
+    toggles.forEach(function (toggle) {
+      var targetId = toggle.getAttribute('data-target');
+      var body     = document.getElementById(targetId);
+      if (!body) return;
+
+      // If localStorage has an explicit state for this section, honour it;
+      // otherwise fall back to the server-side collapsed class.
+      var storedCollapsed = state[targetId];
+      var isCollapsed = (storedCollapsed !== undefined)
+        ? storedCollapsed
+        : toggle.classList.contains('collapsed');
+
+      if (isCollapsed) {
+        toggle.classList.add('collapsed');
+        body.style.maxHeight = '0px';
+        body.style.overflow  = 'hidden';
+      } else {
+        toggle.classList.remove('collapsed');
+        body.style.maxHeight = body.scrollHeight + 'px';
+        body.style.overflow  = 'visible';
+      }
+
+      toggle.addEventListener('click', function () {
+        var nowCollapsed = toggle.classList.contains('collapsed');
+        var freshState   = getState();
+        if (nowCollapsed) {
+          // Expand
+          toggle.classList.remove('collapsed');
+          body.style.overflow  = 'hidden';
+          body.style.maxHeight = body.scrollHeight + 'px';
+          freshState[targetId] = false;
+          setTimeout(function () { if (!toggle.classList.contains('collapsed')) body.style.overflow = 'visible'; }, 260);
+        } else {
+          // Collapse
+          toggle.classList.add('collapsed');
+          body.style.overflow  = 'hidden';
+          body.style.maxHeight = body.scrollHeight + 'px'; // force reflow
+          requestAnimationFrame(function () { body.style.maxHeight = '0px'; });
+          freshState[targetId] = true;
+        }
+        saveState(freshState);
+      });
+    });
+  });
+})();
+</script>
 </body>
 </html>

@@ -24,7 +24,8 @@ def init_db():
         full_name   TEXT    NOT NULL,
         role        TEXT    NOT NULL CHECK(role IN ('admin','finance_manager','finance_exec','ops_manager','ops_planner','ops_exec')),
         active      INTEGER NOT NULL DEFAULT 1,
-        created_at  TEXT    DEFAULT (datetime('now'))
+        created_at  TEXT    DEFAULT (datetime('now')),
+        profile_photo TEXT
     );
 
     -- ── SUPPLIERS ─────────────────────────────────────────────────────────────
@@ -312,6 +313,18 @@ def init_db():
     CREATE TABLE IF NOT EXISTS settings (
         key   TEXT NOT NULL UNIQUE,
         value TEXT
+    );
+
+    -- ── SUPPLIER REQUEST DOCS ─────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS supplier_request_docs (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id    INTEGER NOT NULL,
+        doc_type      TEXT    NOT NULL DEFAULT 'Support',
+        filename      TEXT    NOT NULL,
+        original_name TEXT    NOT NULL,
+        uploaded_by   TEXT    NOT NULL,
+        notes         TEXT,
+        uploaded_at   TEXT    DEFAULT (datetime('now'))
     );
     """)
     db.commit()

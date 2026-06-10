@@ -14,6 +14,15 @@ app = Flask(__name__)
 app.secret_key = "ims-secret-key-change-in-production-2026"
 DB_PATH = os.path.join(os.path.dirname(__file__), "inventory.db")
 
+# ─── FRIENDLY ERROR PAGES ─────────────────────────────────────────────────────
+@app.errorhandler(500)
+def internal_error(e):
+    return render_template("500.html"), 500
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("500.html"), 404
+
 # ─── DB HELPERS ───────────────────────────────────────────────────────────────
 def get_db():
     if "db" not in g:
@@ -139,10 +148,11 @@ def login():
         db   = get_db()
         user = db.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
         if user and check_password_hash(user["password"], password):
-            session["user_id"]   = user["id"]
-            session["username"]  = user["username"]
-            session["full_name"] = user["full_name"]
-            session["role"]      = user["role"]
+            session["user_id"]      = user["id"]
+            session["username"]     = user["username"]
+            session["full_name"]    = user["full_name"]
+            session["role"]         = user["role"]
+            session["profile_photo"] = user["profile_photo"] if user["profile_photo"] else None
             return redirect(url_for("dashboard"))
         flash("Invalid username or password.", "danger")
     return render_template("login.html")
@@ -1352,6 +1362,65 @@ def user_delete(user_id):
     return redirect(url_for("user_list"))
 
 
+@app.route("/settings/users/<int:user_id>/photo", methods=["POST"])
+@login_required
+def user_photo_upload(user_id):
+    """Any user can update their own photo; admins can update any user's photo."""
+    if session["user_id"] != user_id and session["role"] != "admin":
+        flash("Permission denied.", "danger")
+        return redirect(url_for("user_list"))
+    db   = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for("user_list"))
+    f = request.files.get("photo")
+    if not f or not f.filename:
+        flash("No file selected.", "danger")
+        return redirect(url_for("user_list"))
+    allowed = {"png", "jpg", "jpeg", "gif", "webp"}
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in allowed:
+        flash("Invalid file type. Please upload a PNG, JPG, GIF, or WEBP image.", "danger")
+        return redirect(url_for("user_list"))
+    import os as _osp, time as _t
+    upload_dir = _osp.join(_osp.dirname(__file__), "static", "uploads", "profiles")
+    _osp.makedirs(upload_dir, exist_ok=True)
+    # Remove old photo if present
+    if user["profile_photo"]:
+        old_path = _osp.join(upload_dir, user["profile_photo"])
+        if _osp.exists(old_path):
+            _osp.remove(old_path)
+    filename = f"user_{user_id}_{int(_t.time())}.{ext}"
+    f.save(_osp.join(upload_dir, filename))
+    db.execute("UPDATE users SET profile_photo=? WHERE id=?", (filename, user_id))
+    db.commit()
+    # Refresh session photo if updating own account
+    if session["user_id"] == user_id:
+        session["profile_photo"] = filename
+    flash("Profile photo updated.", "success")
+    return redirect(url_for("user_list"))
+
+
+@app.route("/settings/users/<int:user_id>/photo/delete", methods=["POST"])
+@login_required
+def user_photo_delete(user_id):
+    if session["user_id"] != user_id and session["role"] != "admin":
+        flash("Permission denied.", "danger")
+        return redirect(url_for("user_list"))
+    db   = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if user and user["profile_photo"]:
+        import os as _osp2
+        old_path = _osp2.join(_osp2.path.dirname(__file__), "static", "uploads", "profiles", user["profile_photo"])
+        if _osp2.path.exists(old_path):
+            _osp2.remove(old_path)
+        db.execute("UPDATE users SET profile_photo=NULL WHERE id=?", (user_id,))
+        db.commit()
+        if session["user_id"] == user_id:
+            session.pop("profile_photo", None)
+        flash("Profile photo removed.", "success")
+    return redirect(url_for("user_list"))
 
 
 
@@ -6079,6 +6148,24 @@ def run_migrations():
         db.execute("""CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
             value TEXT
+        )""")
+
+        # ── users.profile_photo ───────────────────────────────────────────────
+        existing = {r[1] for r in db.execute("PRAGMA table_info(users)").fetchall()}
+        if "profile_photo" not in existing:
+            db.execute("ALTER TABLE users ADD COLUMN profile_photo TEXT")
+            print("[migration] Added profile_photo to users")
+
+        # ── supplier_request_docs ─────────────────────────────────────────────
+        db.execute("""CREATE TABLE IF NOT EXISTS supplier_request_docs (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id    INTEGER NOT NULL,
+            doc_type      TEXT    NOT NULL DEFAULT 'Support',
+            filename      TEXT    NOT NULL,
+            original_name TEXT    NOT NULL,
+            uploaded_by   TEXT    NOT NULL,
+            notes         TEXT,
+            uploaded_at   TEXT    DEFAULT (datetime('now'))
         )""")
 
         db.commit()

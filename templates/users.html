@@ -15,11 +15,22 @@
   </div>
   <table class="table table-hover sortable">
     <thead>
-      <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+      <tr><th style="width:44px;"></th><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr>
     </thead>
     <tbody>
       {% for u in users %}
       <tr>
+        <td style="padding:8px 10px;">
+          {% if u.profile_photo %}
+          <img src="{{ url_for('static', filename='uploads/profiles/' + u.profile_photo) }}"
+               alt="{{ u.full_name }}" title="{{ u.full_name }}"
+               style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #DEEAF1;">
+          {% else %}
+          <div style="width:34px;height:34px;background:#DEEAF1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:#1F4E79;font-weight:700;">
+            {{ u.full_name[0].upper() }}
+          </div>
+          {% endif %}
+        </td>
         <td class="fw-600">{{ u.full_name }}</td>
         <td style="color:#555;">{{ u.username }}</td>
         <td>
@@ -69,6 +80,24 @@
             data-id="{{ u.id }}" data-name="{{ u.full_name }}">
             <i class="bi bi-trash"></i>
           </button>
+          {% endif %}
+          {# Photo upload button — available to admin for any user #}
+          <label for="photoInput_{{ u.id }}" title="Upload profile photo"
+                 class="btn btn-sm btn-outline-primary py-0 px-2 ms-1" style="cursor:pointer;">
+            <i class="bi bi-camera"></i>
+          </label>
+          <form method="POST" action="{{ url_for('user_photo_upload', user_id=u.id) }}"
+                enctype="multipart/form-data" id="photoForm_{{ u.id }}" style="display:none;">
+            <input type="file" id="photoInput_{{ u.id }}" name="photo" accept="image/*"
+                   onchange="document.getElementById('photoForm_{{ u.id }}').submit();">
+          </form>
+          {% if u.profile_photo %}
+          <form method="POST" action="{{ url_for('user_photo_delete', user_id=u.id) }}"
+                class="d-inline" onsubmit="return confirm('Remove profile photo for {{ u.full_name }}?')">
+            <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1" title="Remove photo">
+              <i class="bi bi-person-x"></i>
+            </button>
+          </form>
           {% endif %}
         </td>
       </tr>
